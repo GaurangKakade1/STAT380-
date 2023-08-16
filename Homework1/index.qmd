@@ -1,0 +1,361 @@
+---
+title: "Homework 1"
+author: "[Gaurang Kakade]{style='background-color: yellow;'}"
+toc: true
+title-block-banner: true
+title-block-style: default
+format: html
+#format: pdf
+---
+
+[Link to the Github repository](https://github.com/psu-stat380/hw-1)
+
+---
+
+::: {.callout-important}
+## Due: Sun, Jan 29, 2023 @ 11:59pm
+
+
+
+Please read the instructions carefully before submitting your assignment. 
+
+1. This assignment requires you to:
+    - Upload your Quarto markdown files to a `git` repository
+    - Upload a `PDF` file on Canvas
+
+1. Don't collapse any code cells before submitting. 
+
+1. Remember to make sure all your code output is rendered properly before uploading your submission.
+
+
+⚠️ Please add your name to the the author information in the frontmatter before submitting your assignment. 
+:::
+
+<br><br><br><br>
+---
+
+## Question 1
+::: {.callout-tip}
+## 20 points
+:::
+
+
+In this question, we will walk through the process of _forking_ a `git` repository and submitting a _pull request_. 
+
+1. Navigate to the Github repository [here](https://github.com/psu-stat380/hw-1) and fork it by clicking on the icon in the top right
+
+![](images/fork.png)
+
+> Provide a sensible name for your forked repository when prompted. 
+
+2. Clone your Github repository on your local machine
+
+    ```bash
+    $ git clone <<insert your repository url here>>
+    $ cd hw-1
+    ```
+
+    Alternatively, you can use Github codespaces to get started from your repository directly.
+
+3. In order to activate the `R` environment for the homework, make sure you have `renv` installed beforehand. To activate the `renv` environment for this assignment, open an instance of the `R` console from within the directory and type
+    
+    ```R
+    renv::activate()
+    ```
+    Follow the instrutions in order to make sure that `renv` is configured correctly. 
+
+4. Work on the _reminaing part_ of this assignment as a `.qmd` file.
+
+    - Create a `PDF` and `HTML` file for your output by modifying the YAML frontmatter for the Quarto `.qmd` document
+
+5. When you're done working on your assignment, push the changes to your github repository.
+
+6. Navigate to the original Github repository [here](https://github.com/psu-stat380/hw-1) and submit a pull request linking to your repository. 
+    
+    Remember to **include your name** in the pull request information!
+
+If you're stuck at any step along the way, you can refer to the [official Github docs here](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork)
+
+
+<br><br><br><br>
+<br><br><br><br>
+---
+
+## Question 2
+::: {.callout-tip}
+## 30 points
+:::
+
+Consider the following vector
+
+```{R}
+my_vec <- c(
+    "+0.07",
+    "-0.07",
+    "+0.25",
+    "-0.84",
+    "+0.32",
+    "-0.24",
+    "-0.97",
+    "-0.36",
+    "+1.76",
+    "-0.36"
+)
+```
+
+
+For the following questions, provide your answers in a code cell.
+
+1. What data type does the vector contain?
+
+    The vector my_vec contains numeric data type.
+
+
+1. Create two new vectors called `my_vec_double` and `my_vec_int` which converts `my_vec` to Double & Integer types, respectively,
+
+```{R}
+my_vec_double <- as.double(my_vec)
+
+my_vec_int <- as.integer(my_vec)
+```
+
+
+1. Create a new vector `my_vec_bool` which comprises of:
+    * ```r TRUE```if an element in `my_vec_double` is $\le 0$
+    * ```r FALSE``` if an element in `my_vec_double` is $\ge 0$
+
+```{R}
+my_vec_bool <- ifelse(my_vec_double <= 0, TRUE, FALSE)
+
+```
+
+    How many elements of `my_vec_double` are greater than zero?
+     There are 4 elements of 'my_vec_double' which are greater than zero.
+```{R}
+sum(my_vec_double>0)
+```
+
+
+1. Sort the values of `my_vec_double` in ascending order. 
+
+```{R}
+sort(my_vec_double)
+```
+
+
+<br><br><br><br>
+<br><br><br><br>
+---
+
+## Question 3
+::: {.callout-tip}
+## 50 points
+:::
+
+In this question we will get a better understanding of how `R` handles large data structures in memory. 
+
+1. Provide `R` code to construct the following matrices:
+```{R}
+x <- matrix(
+  c(1,2,3,4,5,6,7,8,9),
+  nrow = 3,
+  byrow = TRUE
+)
+x
+
+y <- matrix(c(1:100, 1:100^2), 
+            ncol = 10, 
+            byrow = TRUE
+)
+y
+```
+
+$$
+\begin{bmatrix} 
+1 & 2 & 3\\
+4 & 5 & 6\\
+7 & 8 & 9\\
+\end{bmatrix}
+\quad \text{ and } \quad
+\begin{bmatrix} 
+1 & 2 & 3 & 4 & 5 & \dots & 100\\
+1 & 4 & 9 & 16 & 25 & \dots & 10000\\
+\end{bmatrix}
+$$
+
+::: {.callout-warning}
+## Tip
+
+Recall the discussion in class on how `R` fills in matrices
+:::
+
+In the next part, we will discover how knowledge of the way in which a matrix is stored in memory can inform better code choices. To this end, the following function takes an input $n$ and creates an $n \times n$ matrix with random entries. 
+
+```{R}
+generate_matrix <- function(n){
+    return(
+        matrix(
+            rnorm(n^2),
+            nrow=n
+        )
+    )
+}
+```
+
+For example:
+
+```{R}
+generate_matrix(4)
+```
+
+
+Let `M` be a fixed $50 \times 50$ matrix
+
+```{R}
+M <- generate_matrix(50)
+mean(M)
+
+```
+
+
+2. Write a function `row_wise_scan` which scans the entries of `M` one row after another and outputs the number of elements whose value is $\ge 0$. You can use the following **starter code**
+
+```{R}
+row_wise_scan <- function(M){
+    n <- nrow(M)
+    m <- ncol(M)
+
+    # Insert your code here
+    count <- 0
+    for(i in 1:n){
+        for(j in 1:m){
+            if(M[i,j] >= 0){
+                count <- count + 1 
+            }
+        }
+    }
+
+    return(count)
+}
+
+```
+
+
+3. Similarly, write a function `col_wise_scan` which does exactly the same thing but scans the entries of `M` one column after another
+
+```{R}
+col_wise_scan <- function(M){
+    count <- 0
+    
+    ... # Insert your code here
+    for (j in 1:m){
+      for (i in 1:n){
+        if (M[i,j] >= 0){
+          count <- count + 1
+        }
+      }
+    }
+    return(count)
+}
+
+```
+You can check if your code is doing what it's supposed to using the function here[^footnote]
+
+4. Between `col_wise_scan` and `row_wise_scan`, which function do you expect to take shorter to run? Why?
+  
+I think that `row_wise_scan` function will take shorter to run primarily because of the order in which the function accesses the elements of the matrix.The items of     each row are accessed sequentially in `row_wise_scan`, which can speed up            performance by utilizing the memory cache. On the other hand, `col_wise_scan`        accesses each column's elements sequentially, which slows down performance because   it calls for accessing memory that is not cached. Hence, `col_wise_scan` may take    longer than `row_wise_scan` to run.
+
+
+5. Write a function `time_scan` which takes in a method `f` and a matrix `M` and outputs the amount of time taken to run `f(M)`
+
+```{R}
+time_scan <- function(f, M){
+    initial_time <- Sys.time()  # Write your code here
+    f(M)
+    final_time <- Sys.time() # Write your code here
+    
+    total_time_taken <- final_time - initial_time
+    return(total_time_taken)
+}
+
+```
+
+Provide your output to
+
+```{R}
+list(
+    row_wise_time = time_scan(row_wise_scan, M),
+    col_wise_time = time_scan(row_wise_scan, M)
+)
+```
+Which took longer to run? 
+
+`row_wise_time` generated a time difference of 0.0002739 secs which is more than    the time difference of 0.0002520 of `col_wise_time`. Hence, `row_wise_time` took     longer to run.
+
+6. Repeat this experiment now when:
+    * `M` is a $100 \times 100$ matrix
+    * `M` is a $1000 \times 1000$ matrix
+    * `M` is a $5000 \times 5000$ matrix
+
+When `M` is a $100 \times 100$ matrix
+
+```{R}
+N <- generate_matrix(100)
+mean(N)
+
+list(
+    row_wise_time = time_scan(row_wise_scan, N),
+    col_wise_time = time_scan(row_wise_scan, N)
+)
+
+```
+When `M` is a $1000 \times 1000$ matrix
+
+```{R}
+O <- generate_matrix(1000)
+mean(O)
+
+list(
+    row_wise_time = time_scan(row_wise_scan, O),
+    col_wise_time = time_scan(row_wise_scan, O)
+)
+
+```
+When `M` is a $5000 \times 5000$ matrix
+
+```{R}
+P <- generate_matrix(5000)
+mean(P)
+
+list(
+    row_wise_time = time_scan(row_wise_scan, P),
+    col_wise_time = time_scan(row_wise_scan, P)
+)
+```
+
+
+
+What can you conclude?
+
+However, it can be deduced that both functions' running times are likely to lengthen as the size of the matrix does. 
+
+<br><br><br><br>
+<br><br><br><br>
+---
+
+# Appendix
+
+Print your `R` session information using the following command
+
+```{R}
+sessionInfo()
+```
+
+[^footnote]: If your code is right, the following code should evaluate to be `TRUE`
+
+    ```{R}
+    sapply(1:100, function(i) {
+        x <- generate_matrix(100)
+        row_wise_scan(x) == col_wise_scan(x)
+    }) %>% sum == 100
+    ```
