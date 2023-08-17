@@ -1,0 +1,773 @@
+---
+title: "Weekly 11 Summary"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, April 4th
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Revision of Neural Network with one hidden layer
+2.  Revision of Neural Network with two hidden layers
+3.  Regression with Neural Network
+:::
+
+```{r}
+library(tidyverse)
+library(torch)
+library(glmnet)
+library(caret)
+library(dplyr)
+library(tidyr)
+library(nnet)
+library(rpart)
+library(e1071)
+```
+
+```{r}
+ex1 <- \(x) ifelse(
+  sign(x[1] * x[2]) + 0.01 * rnorm(1) <= 0,
+  0,1
+)
+
+n <- 200
+X <- t(replicate(n, 2 * runif(2) - 1))
+y <- apply(X, 1, ex1) %>% as.factor()
+col <- ifelse(y==0, "blue", "red")
+df <- data.frame(y=y, x1 = X[,1], x2 = X[, 2])
+plot(df$x1, df$x2, col = col, pch =19)
+
+```
+
+The code provided creates a synthetic dataset with two features and a binary target variable, and then visualizes the data points. Here's an explanation of each line of code:
+
+1.  **`ex1 <- \(x) ifelse(...)`** defines a function **`ex1`** that takes a vector **`x`** with two elements, computes a condition, and returns 0 or 1 based on the result of the condition. The condition involves checking if the product of the two elements of **`x`** plus a small random noise is less than or equal to 0.
+
+2.  **`n <- 200`** sets the number of data points **`n`** to 200.
+
+3.  **`X <- t(replicate(n, 2 * runif(2) - 1))`** generates an **`n x 2`** matrix of random numbers uniformly distributed between -1 and 1, where **`n`** is the number of data points.
+
+4.  **`y <- apply(X, 1, ex1) %>% as.factor()`** applies the **`ex1`** function to each row of the matrix **`X`** to compute the binary target variable **`y`**. The **`%>% as.factor()`** part of the code converts the resulting vector to a factor.
+
+5.  **`col <- iflese(y==0, "blue", "red")`** is likely a typo and should be **`col <- ifelse(y==0, "blue", "red")`**. This line creates a vector **`col`** that assigns the color "blue" to the points with **`y == 0`** and "red" to the points with **`y == 1`**.
+
+6.  **`df <- data.frame(y=y, x1 = X[,1], x2 = X[, 2])`** creates a data frame **`df`** containing the target variable **`y`** and the two features **`x1`** and **`x2`**.
+
+7.  **`plot(df$x1, df$x2, col = col, pch =19)`** generates a scatter plot of the data points with the x-axis representing feature **`x1`** and the y-axis representing feature **`x2`**. The points are colored based on the **`col`** vector, and the **`pch = 19`** parameter sets the plotting symbol to solid circles.
+
+The code X \<- t(replicate(n, 2 \* runif(2) - 1)) generates an n x 2 matrix of random numbers uniformly distributed between -1 and 1. Here's the breakdown of each part of the code:
+
+runif(2) generates a vector of 2 random numbers uniformly distributed between 0 and 1.
+
+2 \* runif(2) - 1 scales and shifts the vector of random numbers so that they are now uniformly distributed between -1 and 1. It does this by multiplying each element of the vector by 2 and then subtracting 1.
+
+replicate(n, 2 \* runif(2) - 1) generates n copies of the scaled and shifted vector from step 2. The result is an n x 2 matrix, where each row is an instance of the scaled and shifted random vector. The n variable represents the number of data points.
+
+t(replicate(n, 2 \* runif(2) - 1)) transposes the matrix from step 3, so that the random vectors are stored as columns rather than rows. This step is not strictly necessary for the provided code, but it makes the matrix consistent with the typical format where each row represents a data point and each column represents a feature.
+
+The final result is an n x 2 matrix X, with each row representing a data point and each column representing a feature. The elements of the matrix are random numbers uniformly distributed between -1 and 1.
+
+The importance of this code is to generate and visualize a synthetic dataset with a binary target variable. Such a dataset can be used for testing and evaluating machine learning models, especially for classification tasks. Visualizing the data helps to understand the distribution and structure of the data, which can provide insights into the performance of different models and the relationships between the input features and the target variable.
+
+```{r}
+Xnew <- cbind(
+  rep(seq(-1.1,1.1, length.out = 50), 50),
+  rep(seq(-1.1,1.1, length.out = 50), each = 50)
+)
+
+df_new = data.frame(x1 = Xnew[,1], x2 = Xnew[,2])
+
+plt <- function(f, x){
+  plot(x[,1], x[,2], col = ifelse(f(x) < 0.5, "blue", "red"), pch = 22)
+  points(df$x1, df$x2, col = ifelse(y == "0", "blue", "red"), pch = 19)
+}
+
+overview <- function(f){
+  predicted <- ifelse(f(df[, -1]) < 0.5, 0, 1)
+  actual <- df[,1]
+  table(predicted, actual)
+}
+```
+
+```{r}
+f_logistic = \(x)
+    glm(y ~ x1 + x2, df, family = binomial()) %>%
+    predict(., x, type = "response")
+  
+plt(f_logistic, df_new)
+```
+
+This code snippet defines a function **`f_logistic`** that fits a logistic regression model to the original dataset **`df`** using the binary target variable **`y`** and the two predictor variables **`x1`** and **`x2`**. Then, it uses the **`plt`** function from the previous code to visualize the predicted values for the new data points in **`df_new`**.
+
+```{r}
+f_dtree = \(x)
+    rpart(y ~ x1 + x2, df, method = "class") %>%
+    predict(., x, type = "class") %>%
+    as.numeric(.) - 1
+plt(f_dtree, df_new)
+```
+
+In summary, this code fits a decision tree model to the original dataset, predicts the binary target values for a set of new points, and visualizes these predictions alongside the original dataset.
+
+```{r}
+overview(f_logistic)
+overview(f_dtree)
+
+```
+
+### Neural Network with 1 hidden layer
+
+```{r}
+p <- 2
+q <- 20
+hh1_module <- nn_module(
+  initialize = function(){
+    self$f <- nn_linear(p, q)
+    self$g <- nn_linear(q, 1)
+    self$a <- nn_relu()
+    self$s <- nn_sigmoid()
+},
+forward = function(x){
+  x %>%
+    self$f() %>%
+    self$a() %>%
+    self$g() %>%
+    self$s()
+  }
+)
+```
+
+The resulting **`module`** is a neural network architecture that consists of three linear layers with ReLU and sigmoid activations. The architecture can be used for further training and evaluation.
+
+```{r}
+# Preprocess data 
+X_tensor <- torch_tensor(df[, -1] %>% as.matrix(), dtype = torch_float())
+
+y_tensor <- torch_tensor(cbind(df[,1] %>% as.numeric() - 1), dtype = torch_float())
+```
+
+This code converts the input data **`X`** and the output labels **`y`** from the data frame **`df`** into tensors, which are multi-dimensional arrays suitable for use with the torch R package for deep learning.
+
+1.  **`X_tensor <- tensor_tensor(df[, -1] %>% as.matrix(), dtype = torch_float())`**: This line does the following steps:
+    a.  **`df[, -1]`**: This selects all columns except the first one from the data frame **`df`**. This is assuming that the first column contains the output labels **`y`**, and the remaining columns are the input features **`X`**.
+    b.  **`%>% as.matrix()`**: This converts the selected input data into a matrix.
+    c.  **`tensor_tensor( ... , dtype = torch_float())`**: This converts the matrix into a tensor with data type **`torch_float`**. The resulting tensor, **`X_tensor`**, will be used as input for the neural network.
+2.  **`y_tensor <- torch_tensor(cbind(df[,1] %>% as.numeric() - 1), dtype = torch_float())`**: This line does the following steps:
+    a.  **`df[,1]`**: This selects the first column of the data frame **`df`**, which is assumed to contain the output labels **`y`**.
+    b.  **`%>% as.numeric()`**: This converts the output labels into a numeric format.
+    c.  **`- 1`**: This subtracts 1 from the numeric output labels. This step may be necessary if the labels are 1-based (e.g., 1 and 2) instead of 0-based (e.g., 0 and 1).
+    d.  **`cbind( ... )`**: This combines the adjusted output labels into a single column matrix.
+    e.  **`torch_tensor( ... , dtype = torch_float())`**: This converts the single column matrix into a tensor with data type **`torch_float`**. The resulting tensor, **`y_tensor`**, will be used as the output labels for the neural network.
+
+```{r}
+Loss <- function(x,y, model){
+  nn_bce_loss()(model(x), y)
+}
+```
+
+This code defines a custom loss function called **`Loss`** for a neural network model. The loss function computes the Binary Cross-Entropy (BCE) loss between the predicted output values and the true output values. The **`Loss`** function can be used during training to measure the performance of the neural network model and update its parameters accordingly.
+
+```{r}
+F <- hh1_module()
+Loss(X_tensor, y_tensor, F)
+
+```
+
+This above code creates an instance of the neural network module called **`F`** and calculates the Binary Cross-Entropy loss between the predictions made by the network and the true output values using the custom **`Loss`** function.
+
+```{r}
+F <- hh1_module()
+optimizer <- optim_adam(F$parameters, lr = 0.05)
+epochs <- 1000
+
+for(i in 1:epochs){
+  loss <- Loss(X_tensor, y_tensor, F)
+  
+  optimizer$zero_grad()
+  loss$backward()
+  optimizer$step()
+  
+  if (i < 10 || i %% 100 == 0) {
+    cat(sprintf("Epoch: %d, Loss: %.4f\n", i, loss$item()))
+  }
+}
+
+```
+
+1.  **`F <- hh1_module()`**: This line creates an instance of the neural network module defined earlier and assigns it to the variable **`F`**.
+
+2.  **`optimizer <- optim_adam(F$parameters, lr = 0.05)`**: This line creates an Adam optimizer with a learning rate of 0.05. The optimizer will be used to update the neural network's parameters during the training process.
+
+3.  **`epochs <- 1000`**: This line sets the number of training epochs to 1000.
+
+4.  **`for(i in 1:epochs) { ... }`**: This loop iterates through each epoch of the training process.
+
+5.  **`loss <- Loss(X_tensor, y_tensor, F)`**: This line calculates the Binary Cross-Entropy loss between the predictions made by the network and the true output values using the custom **`Loss`** function.
+
+6.  **`optimizer$zero_grad()`**: This line resets the gradients of the neural network's parameters to zero.
+
+7.  **`loss$backward()`**: This line calculates the gradients of the loss with respect to the neural network's parameters using back propagation.
+
+8.  **`optimizer$step()`**: This line updates the neural network's parameters based on the gradients calculated in the previous step.
+
+9.  **`if (i < 10 || i %% 100 == 0) { ... }`**: This conditional statement checks whether the current epoch is one of the first 10 epochs or a multiple of 100. If so, it will print the current epoch number and the loss value.
+
+```{r}
+f_nn = \(x) as_array(F( torch_tensor(x %>% as.matrix(), dtype = torch_float()) ))
+
+plt(f_nn, df_new)
+```
+
+This code defines a new function **`f_nn`** that takes an input matrix **`x`** and makes predictions using the trained neural network **`F`**. Then, it uses the **`plt`** function to visualize the predictions on the **`df_new`** dataset.
+
+```{r}
+overview(f_nn)
+```
+
+### Neural Network with 2 hidden layers
+
+```{r}
+p <- 2
+q <- 20
+q1 <- 100
+q2 <- 20
+
+hh2_module <- nn_module(
+  initialize = function(){
+    self$f <- nn_linear(p, q1)
+    self$g <- nn_linear(q1, q2)
+    self$h <- nn_linear(q2, 1)
+    self$a <- nn_relu()
+    self$s <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$f() %>%
+      self$a() %>%
+      self$g() %>%
+      self$a() %>%
+      self$h() %>%
+      self$s() 
+  }
+)
+```
+
+```{r}
+X_tensor <- torch_tensor(df[, -1] %>% as.matrix(), dtype = torch_float())
+
+y_tensor <- torch_tensor(cbind(df[,1] %>% as.numeric() - 1), dtype = torch_float())
+```
+
+```{r}
+Loss <- function(x,y, model){
+  nn_bce_loss()(model(x), y)
+}
+```
+
+```{r}
+F <- hh2_module()
+Loss(X_tensor, y_tensor, F)
+```
+
+```{r}
+F <- hh2_module()
+optimizer <- optim_adam(F$parameters, lr = 0.05)
+epochs <- 1000
+
+for(i in 1:epochs){
+  loss <- Loss(X_tensor, y_tensor, F)
+  
+  optimizer$zero_grad()
+  loss$backward()
+  optimizer$step()
+  
+  if (i < 10 || i %% 100 == 0) {
+    cat(sprintf("Epoch: %d, Loss: %.4f\n", i, loss$item()))
+  }
+}
+```
+
+```{r}
+f_nn = \(x) as_array(F( torch_tensor(x %>% as.matrix(), dtype = torch_float()) ))
+
+plt(f_nn, df_new)
+```
+
+```{r}
+overview(f_nn)
+```
+
+Let's wrap these methods in a function
+
+``` r
+classifier <- 
+function(train, type = "nn", ...){
+    if(type == "logistic"){
+      # ... code
+    }
+    
+    else if(type == "rpart"){
+      # ... code
+    }
+    
+    else if(type == "svm"){
+      # ... code
+    }
+    else is (type == "nn){
+      # ... code
+    }
+    
+    # ... return a function
+}
+```
+
+```{r}
+ex <- \(x) ifelse(
+  sum(x^3) <= 0.1,
+  0, 1
+)
+
+n <- 200
+X <- t(replicate(n, 2 * runif(2) - 1))
+y <- apply(X, 1, ex) %>% as.factor()
+col <- ifelse(y == 0, "blue", "red")
+df <- data.frame(y = y, x1 = X[, 1], x2 = X[,2])
+plot(df$x1, df$x2, col = col, pch = 19)
+
+Xnew <- cbind(
+  rep(seq(-1.1, 1.1, length.out = 50), 50),
+  rep(seq(-1.1, 1.1, length.out = 50), each = 50)
+  
+)
+
+df_new = data.frame(x1 = Xnew[,1], x2 = Xnew[,2])
+```
+
+This code generates a dataset with two features (**`x1`** and **`x2`**) and a binary outcome variable **`y`**. The dataset is visualized using a scatter plot with different colors for each class. Then, it creates a new dataset **`df_new`** containing a grid of points that can be used for making predictions and visualizing the decision boundary of a classifier.
+
+### 
+
+## Regression with Neural Networks
+
+```{r}
+generate_data <- function(n, noise = 0.1) {
+  x <- seq(1*pi, 2*pi, length.out = n)
+  y <- exp(x) * (sin(150/x) + rnorm(n, 0, noise))
+  data.frame(x=x, y=y)
+}
+
+df <- generate_data(200, noise = 0.1)
+plot(df$x, df$y, pch = 19)
+```
+
+This code defines a function called **`generate_data`** that generates a dataset with a specified number of samples (**`n`**) and a specified level of noise. The dataset consists of two variables: **`x`** and **`y`**. The variable **`x`** takes values from 1π to 2π, and **`y`** is computed as the product of **`exp(x)`** and the sum of **`sin(150/x)`** and a normally-distributed random noise term. The code then generates a dataset with 200 samples and a noise level of 0.1, and plots the resulting data points.
+
+```{r}
+x_new <- seq(0.9 * pi, 2.1 * pi, length.out = 1000)
+df_new <- data.frame(x = x_new)
+
+plt_reg <- function(f,x,...){
+  ynew <- f(x)
+  ylim <- range(c(ynew, df$y))
+  ylim[1] <- max(c(-800, ylim[1]))
+  ylim[2] <- min(c(250, ylim[2]))
+  xlim <- range(x)
+  plot(df$x, df$y, pch = 22, col = "red", xlim = xlim, ylim = ylim, ...)
+  points(x[,1], ynew, pch = 22, type = "l")
+}
+  
+```
+
+This code defines a function called **`plt_reg`** that takes a function **`f`**, a data frame **`x`** with new **`x`** values, and additional optional plotting arguments. The function **`plt_reg`** plots the original data points and the fitted curve from the function **`f`** using the new **`x`** values provided.
+
+### Linear Regression
+
+```{r}
+f_lm = \(x)
+        lm(y ~ x, df) %>%
+        predict(., x)
+        
+plt_reg(f_lm, df_new)
+
+```
+
+This code defines a linear regression function **`f_lm`** and then uses the **`plt_reg`** function to plot the original data points and the fitted curve from the linear regression model.
+
+### Polynomial regression
+
+```{r}
+f_polynomial = \(x)
+          lm(y ~ x + I(x^2) + I(x^10) + I(x^5), df) %>%
+          predict(., x)
+plt_reg(f_polynomial, df_new)
+```
+
+In summary, this code snippet fits a polynomial regression model to the data, makes predictions using the model, and then plots the original data points along with the fitted polynomial curve.
+
+### Regression Tree
+
+```{r}
+f_dtree <- \(x)
+    rpart(y ~ x, df) %>%
+    predict(., x)
+    
+plt_reg(f_dtree, df_new)
+```
+
+In summary, this code snippet fits a decision tree regression model to the data, makes predictions using the model, and then plots the original data points along with the fitted decision tree regression curve.
+
+### SVM
+
+```{r}
+f_svm <- \(x)
+    svm(y~x, df, kernel = "radial") %>%
+    predict(.,x)
+
+plt_reg(f_svm, df_new)
+```
+
+This code snippet defines a function **`f_svm`** that trains a support vector machine (SVM) with a radial basis function (RBF) kernel using the **`svm()`** function from the e1071 package. The function takes **`x`** as input, which in this case will be the **`df_new`** data frame when you call the **`plt_reg`** function.
+
+### Neural Network
+
+```{r}
+reg_module <- nn_module(
+  initialize = function() {
+    self$f <- nn_linear(1,20)
+    self$g <- nn_linear(20,100)
+    self$h <- nn_linear(100,1)
+    self$a <- nn_relu()
+  # self$s <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$f() %>%
+      self$a() %>%
+      self$g() %>%
+      self$a() %>%
+      self$h() #%>%
+    # self$s()
+  }
+)
+```
+
+This code snippet defines a neural network module called **`reg_module`** using the **`nn_module()`** function from the torch package. The module has three linear layers (fully connected layers) and uses the ReLU (rectified linear unit) activation function between the layers.
+
+```{r}
+f_nn <- function(x){
+  F <- reg_module()
+  X_tensor <- torch_tensor(df$x %>% as.matrix(), dtype=torch_float())
+  y_tensor <- torch_tensor(cbind(df$y), dtype=torch_float())
+  optimizer <- optim_adam(F$parameters, lr = 0.05)
+  epochs <- 2000
+  
+  for(i in epochs){
+    loss <- nn_mse_loss()(F(X_tensor), y_tensor)
+    optimizer$zero_grad()
+    loss$backward()
+    optimizer$step()
+  }
+  return(as_array(F(torch_tensor(x %>% as.matrix(), dtype=torch_float()))))
+} 
+plt_reg(f_nn, df_new)
+```
+
+This code defines a function **`f_nn`** that creates and trains a neural network using the **`reg_module`** defined in the previous code snippet. The neural network is trained to perform regression on the given dataset **`df`** and predicts the output for the new data points **`df_new`**. The function **`plt_reg`** is used to visualize the neural network's performance.
+
+## Thursday, April 6th
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Introduction to *Luz*
+2.  Dataloaders
+3.  Touch for image classification
+:::
+
+```{r}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    "glmnet",
+    "caret",
+    "car",
+    "corrplot",
+    "repr",
+    "tidyverse",
+    "torch",
+    "nnet",
+    "rpart",
+    "e1071",
+    # NEW
+    "torch",
+    "torchvision",
+    "luz"
+)
+
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+
+
+```
+
+### Luz
+
+Luz is higher level API for touch providing abstractions to allow for much less verbose trainig loops.
+
+#### Allowing hyperparameters for NNs
+
+```{r}
+nn_model <- nn_module(
+  initialize = function(p, q1){
+    self$hidden1 <- nn_linear(p, q1)
+    self$output <- nn_linear(q1, 1)
+    self$activation <- nn_relu()
+    self$sigmoid <- nn_sigmoid()
+  },
+  
+  forward = function(x){
+    x %>%
+      self$hidden1() %>%
+      self$activation() %>%
+      self$output() %>%
+      self$sigmoid()
+  }
+)
+```
+
+```{r}
+x <- torch_randn(10,2)
+```
+
+This line of code generates a 10x2 tensor using the **`torch_randn()`** function. The function **`torch_randn()`** creates a tensor filled with random numbers from a standard normal distribution (mean 0 and variance 1). **`torch_randn(10, 2)`**: The function **`torch_randn()`** generates random numbers from a standard normal distribution. The arguments **`10`** and **`2`** indicate the dimensions of the tensor, which is a 10x2 matrix.
+
+```{r}
+nn_model(p=2, q1=10)(x)
+```
+
+### Luz Setup
+
+```{r}
+nn_model %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  )
+```
+
+This is equivalent to specifying:
+
+\`\`\` r
+
+F \<- nn_module()
+
+opt \<- optim_adam(F\$parameters)
+
+...
+
+for( i in 1: ...){
+
+loss \<- nn_bce_loss()(x, f(y))
+
+...
+
+}
+
+Luz hyperparameters
+
+```{r}
+nn_model <- nn_module(
+  initialize = function(p, q1, q2, q3) {
+    self$hidden1 <- nn_linear(p, q1)
+    self$hidden2 <- nn_linear(q1, q2)
+    self$hidden3 <- nn_linear(q2, q3)
+    self$output <- nn_linear(q3, 1)
+    self$activation <- nn_relu()
+    self$sigmoid <- nn_sigmoid()
+  },
+  
+  forward = function(x) {
+    x %>%
+      self$hidden1() %>% self$activation() %>%
+      self$hidden2() %>% self$activation() %>%
+      self$hidden3() %>% self$activation() %>%
+      self$output() %>% self$sigmoid()
+  }
+)
+
+```
+
+```{r}
+nn_model %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_opt_hparams(lr = 0.02)
+```
+
+Luz Fit
+
+``` r
+fit_nn <- nn_model %>%
+  setup(
+     loss = nn_bce_loss(),
+     optimizer = optim_adam
+  ) %>%
+  set_hparams(p = 2, q1 = 5, q2 = 7 , q3 = 5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  ### Fit the neural network
+  fit(
+    data = list(
+       as.matrix(df[, -1]),
+       as.numeric(df[, 1]) - 1
+    ),
+    epochs = 10,
+    verbose = TRUE
+  )
+
+
+```
+
+> This now becomes equivalent to:
+>
+> \`\`\`
+>
+> F \<- nn_model(p = 2, q1 = 5, q2 = 7, q3 = 5)
+>
+> opt \<- optim_adam(lr = 0.02)
+>
+> x \<- torch_tensor(as.matrix(df\[,-1\]), dtype = torch_float())
+>
+> y \<- torch_tensor(as.matrix(df\[,1\]) - 1, dtype = torch_float())
+>
+> for (i in 1: ...){
+>
+> loss \<- nn_bce_loss()(x, f(y))
+>
+> optmizer\\\$zero_grad()
+>
+> loss\\\$backward()
+>
+> optmizer\\\$step()
+>
+> print(paste0("Train metrics: Loss: " loss))
+>
+> }
+
+``` r
+plot(fit_nn)
+```
+
+The output of Luz allows to use the familiar predict function
+
+``` r
+predict(fit_nn, Xnew)
+```
+
+*Luz validation Data*
+
+```{r}
+test_ind <- sample(1:nrow(df), 10, replace = FALSE)
+```
+
+``` r 
+fit_nn <- nn_model %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p = 2, q1 = 5, q2 = 7, q3 = 5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  ### Fit the neural network
+  fit(
+    data = list(
+      as.matrix(df[, -1]),
+      as.numeric(df[, 1]) - 1
+    ),
+    epochs = 10,
+    verbose = TRUE
+  )
+```
+
+``` r 
+plot(fit_nn)
+```
+
+**Luz metrics**
+
+Luz metrics allow you to examine metrics than the loss function during the NNet training procedure
+
+```{r}
+predicted <- torch_randn(100)
+expected <- torch_randn(100)
+metric <- luz_metric_mse()
+
+metric <- metric$new()
+metric$update(predicted, expected)
+metric$compute()
+```
+
+```{r}
+nn_model %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam,
+    # Specify the metrics you want to examine
+    metrics = list(
+      luz_metric_binary_accuracy(),
+      luz_metric_binary_auroc()
+    )
+  )
+```
+
+**Putting it all together**
+
+``` r 
+fit_nn <- nn_module %>%
+  setup(
+    loss = nn_bce_loss(),
+    optimizer = optim_adam
+  ) %>%
+  set_hparams(p=2, q1=5, q2=7, q3=5) %>%
+  set_opt_hparams(lr = 0.02) %>%
+  ### Fit the neural network
+  fit(
+    dat = list(
+      as.matrix(df[-test_ind, -1]),
+      as.numeric(df[-test_ind, 1]) - 1
+    ),
+    valid_data = list(
+      as.matrix(df[+test_ind, -1]),
+      as.numeric(df[+test_ind, 1]) - 1
+    ),
+    epochs = 10,
+    verbose = TRUE
+  )
+```
+
+``` r 
+plot(fit_nn)
+```
