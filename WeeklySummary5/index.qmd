@@ -1,0 +1,423 @@
+---
+title: "Weekly 5 Summary"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+prefer-html: true
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, Feb 7
+
+::: callout-important
+## TIL
+
+Today, I learnt the following concepts in class:
+
+1.  Integration of regression coefficients
+
+2.  Categorical covariates
+
+3.  Multiple regression
+
+    $\bullet$ Extension from single regression
+
+    $\bullet$ Other topics
+:::
+
+### Packages we will require this week
+
+```{R}
+library(tidyverse)
+library(ISLR2)
+library(cowplot)
+library(kableExtra)
+```
+
+## Integration of regression coefficients
+
+What is the interpretation of $\beta_0$ and $\beta_1$ ?
+
+The regression model is given as follows:
+
+$$
+y_i = \beta_0 + \beta_1 x_i + \epsilon_i
+$$
+
+where:
+
+1.  $y_i$ is the response
+2.  $x_1$ is the covariate
+3.  $\epsilon_i$ is the error (vertical black line in lecture 4 notes)
+4.  $\beta_0$ and $\beta_1$ are the regression coefficients
+5.  $i = 1, 2, \dots, n$ are the indices for the observations
+
+What is the interpretation for the regression coefficients ?
+
+$\beta_0$ is the intercept and $\beta_1$ is the slope.
+
+Let's consider the following example using `mtcars`
+
+```{R}
+library(ggplot2)
+mtcars %>% head() %>% kable()
+
+```
+
+The above code uses the mtcars dataset that comes pre-installed with R, the code is using the pipe operator %\>% to pass the `mtcars` data to the function head(). This function returns the first 6 rows of the mtcars dataset. The result of head() is then passed to the kable() function from the knitr package. This function formats the data as a nice-looking table and outputs it in the R console.
+
+Consider the following relationship
+
+```{R}
+x <- mtcars$hp
+y <- mtcars$mpg
+
+plot(x, y, pch = 20, xlab = "HP", ylab = "MPG")
+
+model <- lm(y~x) # This line of code creates a linear
+# regression model object in R. The response variable "y"
+# is modeled as a linear function of the predictor
+# variable "x". The syntax of the lm() function stands
+# for "linear model". After running this code, the object
+# model will contain information about the fit of the
+# regression model, such as the coefficients, residuals,
+# and other statistical properties.
+
+summary(model)
+
+```
+
+For the intercept this means that :
+
+> A "hypothetical" car with `hp = 0` will have `mpg = 30.09` = $\beta_0$
+
+It's more interesting and instructive to consider the interpretation of the slope:
+
+Let's say we have some covariate $x_0$ then the expected value for $y(x_0)$ is given by:
+
+$$
+y(x_0) = \beta_0 + \beta_1 x_0
+$$
+
+What's the expected value for $x_0 + 1$?
+
+$$
+\begin{aligned}
+y(x_0 + 1) &= \beta_0 + \beta_1 \times (x_0 + 1)\\ \\
+&= \beta_0 + \beta_1 x_0 + \beta_1\\ \\
+&= y(x_0) + \beta_1\\ \\
+\implies \beta_1 &= y(x_0 + 1) - y(x_0)
+\end{aligned}
+$$
+
+<br><br><br><br><br><br><br>
+
+------------------------------------------------------------------------
+
+## Categorical covariates
+
+Up until now, we have looked at \_simple\_ linear regression models where both $x$ and $y$ are quantitative.
+
+Let's confirm that `cyl` is indeed categorical:
+
+```{R}
+mtcars$cyl
+```
+
+Another example is with the iris dataset:
+
+```{R}
+iris %>% head() %>% kable()
+```
+
+Let's consider the following example:
+
+We want to see if there is a relationship between `species` and `sepal length`. How would we start the EDA?
+
+```{R}
+y <- iris$Sepal.Length
+x <- iris$Species
+
+boxplot(Sepal.Length ~ Species, iris)
+```
+
+Let's look just run a linear regression model and see what the model output is going to look like:
+
+```{R}
+cat_model <- lm(Sepal.Length ~ Species, iris)
+cat_model
+```
+
+Even if $x$ is categorical, we can still write down the regression model as follows:
+
+$$
+y_i = \beta_0 + \beta_1 x_i
+$$
+
+where $x_i \in \{ setosa, \ versicolor, \ virginica \}$. This means that we end up with , (fundamentally) three different models.
+
+1.  $y_i = \beta_0 + \beta_1 x_i =$ `setosa`
+2.  $y_i = \beta_0 + \beta_1 x_i =$ `versicolor`
+3.  $y_i = \beta_0 + \beta_1 x_i =$ `virginica`
+
+This implies that:
+
+1.  $y_i = \beta_0 + \beta_1 (x_i = c_1)$
+2.  $y_i = \beta_0 + \beta_1 (x_i = c_2)$
+3.  $y_i = \beta_0 + \beta_1 (x_i = c_3)$
+
+This further implies that:
+
+1.  $y_i = \beta_0$
+
+2.  $y_i = \beta_0 + \beta_1 (x_i = c_2)$
+
+3.  $y_i = \beta_0 + \beta_1 (x_i = c_3)$
+
+Now, the interpretation for the coefficients are as follows;
+
+#### Intercept
+
+$\beta_0$ is the expected $y$ value when $x$ belongs to the base category. This is what the intercept is capturing.
+
+#### Slopes
+
+$\beta_1$ with the name `Species.versicolor` represents the following:
+
+`(Intercept)` = $y(x = \texttt{setosa})$
+
+`Species.versicolor` = $y(x = \texttt{versicolor}) - y(x = \texttt{setosa})$
+
+`Species.virginica` = $y(x = \texttt{verginica}) - y(x = \texttt{setosa})$
+
+### Reordering the factors
+
+Let's say that we didn't want `setosa` to be the baseline level, and, instead we wanted `virginica` to be the baseline level. How would one do this?
+
+First, we're going to reorder/relevel the categorical covariate
+
+```{R}
+iris$Species
+iris$Species <- relevel(iris$Species, "virginica")
+
+iris$Species # After
+```
+
+Once we do the releveling, we can now run the regression model:
+
+```{R}
+new_cat_model <- lm(Sepal.Length ~ Species, iris)
+new_cat_model
+```
+
+## Thursday, Jan 19
+
+::: callout-important
+## TIL
+
+Today, I learnt the following concepts in class:
+
+1.  Multiple regression
+2.  Interpretation of coefficients of multiple regression
+3.  Significance of Interpretation of coefficients of multiple regression
+:::
+
+Three plotting libraries
+
+1.  base plot (plot)
+2.  ggplot
+3.  plotly
+
+```{R}
+library(plotly)
+```
+
+### Multiple Regression
+
+This is the extension of simple linear regression to multiple covariates $X = [x_1 | x_2 | \dots |x_p]$, i.e.,
+
+$$
+y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \dots \beta_p x_p + \epsilon
+$$
+
+In particular, the data looks like the following:
+
+\| $\mathbf y$ \| $\mathbf x_1$ \| $\mathbf x_2$ \| $\dots$ \| $\mathbf x_p$ \|
+
+\|:\-\-\-\-\-\-\-\--\|:\-\-\-\-\-\-\-\--\|:\-\-\-\-\-\-\-\--\|:\-\-\-\-\-\-\-\--\|:\-\-\-\-\-\-\-\--\|
+
+\|$y_{1}$ \|$x_{1,1}$ \|$x_{2,1}$ \|${...}$ \|$x_{p,1}$ \|
+
+\|$y_{2}$ \|$x_{1,2}$ \|$x_{2,2}$ \|${...}$ \|$x_{p,2}$ \|
+
+\|$y_{3}$ \|$x_{1,3}$ \|$x_{2,3}$ \|${…}$ \|$x_{p,3}$ \|
+
+\|${\vdots}$ \|${\vdots}$ \|${\vdots}$ \|$\dots$ \|$\dots$ \|$\vdots$
+
+\|$y_{n}$ \|$x_{1,n}$ \|$x_{2,n}$ \|${...}$ \|$x_{p,n}$ \|
+
+and, the full description of the model is as follows:
+
+$$
+y_i = \beta_0 + \beta_1 x_{1,i} + \beta_2 x_{2, i} + \dots + \beta_p x_{p,i} + \epsilon_i,
+$$
+
+knitr::kable()
+
+> In this, knitr is the package and kable() is the function.
+
+plotly::last_plot()
+
+> In this, plotly is the package and last_plot is the function.
+
+ggplot2::plot()
+
+> Similarly, in this ggplot2 is the package and plot() is the function.
+
+Consider the `Credit` dataset
+
+```{R}
+library(ISLR2)
+attach(Credit)
+
+df <- Credit %>% tibble()
+colnames(df) <- tolower(colnames(df))
+df
+```
+
+and, we'll know at the following three columns: `income`, `rating`, `limit`.
+
+```{R}
+df3 <- df %>% select(income, rating, limit)
+df3
+```
+
+If we want to see how the credit limit is related to income and credit rating, we can visualize the following plot
+
+```{R}
+fig <- plot_ly(df3, x=~income, y=~rating, z=~limit)
+fig %>% add_markers()
+```
+
+The regression mode is as follows:
+
+```{R}
+model <- lm(limit ~ income + rating, df3)
+model
+```
+
+What does the regression model look like here?
+
+```{R}
+ranges <- df3 %>%
+    select(income, rating) %>%
+    colnames() %>%
+    map(\(x) seq(0.1 * min(df3[x]), 1.1 * max(df3[x]),
+    length.out = 50))
+
+# The code is generating a sequence of numbers that
+# represent the range of values for two variables income
+# and rating in the data frame df3. This sequence of
+# numbers is being stored in the ranges object.
+# The code uses the select function to select only the
+# columns income and rating from the data frame df3. Then
+# it uses the colnames function to extract the names of
+# these columns. Next, the code uses the map function
+# from the purrr package to apply a function to each
+# column name. The function generates a sequence of
+# numbers that covers the range of values in each column,
+# with a step of 0.1 times the minimum value and 1.1
+# times the maximum value. The number of numbers in the
+# sequence is specified by the length.out argument, which
+# is set to 50.
+
+
+b <- model$coefficients 
+z <- outer(
+    ranges[[1]],
+    ranges[[2]],
+    Vectorize(function(x2, x3) {
+        b[1] + b[2] * x2 + b[3] * x3
+    })
+)
+
+# This code is defining a matrix z that contains the
+# predicted values for a multiple linear regression model
+# with two predictors (income and rating) based on the
+# coefficients b from the model. The outer function
+# calculates the Cartesian product of the two ranges
+# (ranges[[1]] and ranges[[2]]), i.e., the values of x2
+# and x3 for all possible combinations of these two
+# variables. For each combination, the linear equation
+# represented by the coefficients b is calculated using
+# b[1] + b[2] * x2 + b[3] * x3 and the result is stored
+# in the matrix z.
+
+
+fig %>% 
+    add_surface(x = ranges[[1]], y = ranges[[2]], z = t(z), 
+    alpha = 0.3) %>% 
+    add_markers()
+```
+
+#### What is the interpretation for this coefficients?
+
+1.  $\beta_0$ is the expected value of $y$ when $income = 0$ and $rating = 0$
+
+2.  $\beta_1$ is saying that if $rating$ is held constant and $income$ changes by 1 unit, then the corresponding change in the `limit` is $0.5573$.
+
+3.  $\beta_2$ is saying that if `income` is held constant and `rating` changes by $1$ unit, then the corresponding change in `limit` is $14.771$.
+
+<br><br><br><br><br><br>
+
+<br><br><br><br><br><br>
+
+What about the significance ?
+
+```{R}
+summary(model)
+```
+
+### Multiple regression
+
+```{R}
+x <- seq(0, 1, length.out = 100)
+b0 <- 1.0
+b1 <- 2.0
+y <- b0 + b1 * x + rnorm(100) * 0.1
+plot(x,y, pch = 20)
+
+model <- lm(y~x)
+summary(model)
+```
+
+This code generates a linear model in R. It starts by generating an **`x`** sequence of 100 equally spaced values between 0 and 1. Then it creates two variables, **`b0`** and **`b1`**, with values of 1.0 and 2.0, respectively. It uses these values to generate **`y`** with a formula **`b0 + b1 * x + rnorm(100) * 0.7`**. **`rnorm(100)`** generates random normal deviates with a mean of 0 and standard deviation of 0.7. The code then plots **`x`** against **`y`** using the **`plot()`** function and fits a linear regression model to the data using the **`lm()`** function with the formula **`y ~ x`**. Finally, it summarizes the results of the linear regression model using the **`summary()`** function.
+
+The value **`0.1`** in the code is the standard deviation of the normal distribution used to generate random noise to add to the **`y`** variable.
+
+`As the standard deviation increases, the Adjusted R-squared decreases`
+
+```{R}
+library(ISLR2)
+library(dplyr)
+library(ggplot2)
+
+attach(ISLR2::Credit)
+df <- Credit %>% tibble() %>% rename_all(tolower)
+df
+
+model <- lm(limit ~ rating + married, df)
+model
+
+ggplot(df) + 
+      geom_point(aes(x = rating, y = limit, color = married)) +
+      geom_point(aes(x = rating, y = limit, fill= married))
+
+
+```
+
+This code is loading the **`ISLR2`** and **`dplyr`** packages, as well as the **`ggplot2`** library. The **`Credit`** data set is loaded from the **`ISLR2`** package and saved as a tibble named **`df`**. **`attach`** is a function in R that temporarily loads a data set into the search path, so that its objects can be accessed directly by name, rather than having to reference the data set each time with its full name. In other words, you can use the variables in the data set as if they are in the work space. However, it is generally not recommended to use **`attach`** as it can lead to naming conflicts and make the code harder to maintain.The **`rename_all`** function is used to convert the names of all columns in the tibble to lowercase. A linear regression model is then fit to the data using the formula **`limit ~ rating + married`**. The response variable **`limit`** is modeled as a linear function of the predictor variables **`rating`** and **`married`**. Finally, a scatterplot is created using **`ggplot2`**, with the points colored and filled according to the value of the **`married`** variable.
