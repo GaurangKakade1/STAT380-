@@ -1,0 +1,513 @@
+---
+title: "Week 4 Summary"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, Jan 17
+
+## TIL
+
+::: callout-important
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Introduction to Statistical Learning
+2.  Simple Linear Regression
+3.  Multiple Regression
+:::
+
+AGENDA:
+
+1.  Intro to statistical learning
+
+2.  Simple Linear regression
+
+    $\bullet$ Motivation
+
+    $\bullet$ $\ell_{2}$ estimator
+
+    $\bullet$ Inference
+
+    $\bullet$ Prediction
+
+3.  Multiple Regression
+
+    $\bullet$ Extension
+
+### Packages we will require this week
+
+```{r}
+library(tidyverse)
+library(ISLR2)
+library(cowplot)
+library(kableExtra)
+library(htmlwidgets)
+```
+
+### Statistical Learning
+
+Suppose we are given a dataset:
+
+$X$ = \[$X_{1}$,$X_{2}$,...,$X_{n}$\]
+
+-   These are called predictor/independent variables/features.
+
+$y$= $f(X)$
+
+-   $y$ is called the response/ dependent variable.
+
+The goal of statistical learning is to find a function $f$ such that
+
+$y$ = $f(X)$, i.e.,
+
+$y_{i}$ = $f(X_{i})$ = $f(X_{i,1}, X_{i,2}, …., X_{i,p})$
+
+### Different Flavors : Statistical Learning
+
+-   Supervised learning
+
+    $\bullet$ Regression
+
+    $\bullet$ Classification
+
+-   Unsupervised learning (There is no $y$; much harder)
+
+-   Semi-supervised learning (The case where you have $y$ but $x$ is something else)
+
+-   Reinforcement learning (Corresponds to a case where the model is thought to do the work)
+
+## Teen birth rate vs Poverty
+
+-   birth15to17: birth rate per 1000 females 15 to 17 years old
+-   povpct: poverty rate
+
+```{r}
+## URL for the dataset:
+url <- "https://online.stat.psu.edu/stat462/sites/onlinecourses.science.psu.edu.stat462/files/data/poverty/index.txt"
+df = read.table("https://online.stat.psu.edu/stat462/sites/onlinecourses.science.psu.edu.stat462/files/data/poverty/index.txt", header = TRUE)
+View(df)
+
+df <- read_tsv(url)
+df %>% head(., 10) %>% knitr::kable()
+
+#x = df$PovPct
+#y = df$Brth15to17
+```
+
+### Goal
+
+Predict the birth rate as a function of the poverty rate
+
+```{r}
+colnames(df) <- tolower(colnames(df))
+x <- df$povpct
+y <- df$brth15to17
+```
+
+### Scatterplot
+
+Visualize the relationship between the $x$ and $y$ variables
+
+```{r}
+plt <- function(){
+plot(
+  x,
+  y,
+  pch = 20,
+  xlab = "Pov %",
+  ylab = "Birth rate (15-17)"
+)
+}
+
+plt()
+```
+
+#### Lines through the points
+
+```{r}
+#| echo: true
+#| fig-width: 5
+#| fig-height: 8
+b0 <- c(-2, 0, 2)
+b1 <- c(0, 1, 2)
+
+par(mfrow = c(3,3))
+
+for(B0 in b0){
+  for(B1 in b1){
+    plt()
+    curve(B0 + B1 * x, 0, 30, add = T, col = "red")
+    title(main = paste("b0 =", B0, "and b1 =", B1))
+    #par(mar=c(5,4,4,2) + 0.1)
+    
+  }
+}
+
+#plot()
+#curve(b0 + b1 * x, 0, 30, add = T, col = 'red')
+```
+
+## Least squares estimator
+
+```{r}
+b0 <- 10 # what is b0 (an intercept?)
+b1 <- 1.1
+
+yhat <- b0 + b1 * x
+
+plt()
+curve( b0 + b1 * x, 0, 30, add = T, col = 'red')
+title(main = paste("b0 =", B0, " and b1=", B1))
+segments(x, y, x, yhat)
+
+resids <- abs(y - yhat)^2
+ss_resids <- sum(resids)
+title(main = paste("b0, b1, ss_residuals =", b0, b1, ss_resids, sep = ","))
+par(mar=c(5,4,4,2) + 0.1)
+
+```
+
+The best fit line minimizes residuals
+
+```{r}
+model <- lm(y ~ x)
+sum(residuals(model)^2) # "sum(residuals(model)^2)" in R calculates the sum of squared residuals for a given model "model".
+# This measure, also known as the residual sum of squares (RSS), is used to evaluate the goodness of fit of a regression model. Lower values of RSS indicate a better fit, as they represent a smaller difference between the observed and predicted values. The RSS can be used as a criterion for model selection, and for comparing different models for the same data.
+```
+
+```{r}
+summary(model)
+```
+
+## Thursday, Jan 19
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Difference between Null Hypothesis and Alternate Hypothesis
+
+2.  Terminology for different components of the model such as
+
+    $\bullet$ Covariate
+
+    $\bullet$ Response
+
+    $\bullet$ Fitted Values
+
+    $\bullet$ Residuals
+
+3.  Other important terms such:
+
+    $\bullet$ Sum of squares for Residuals ($RSS$)
+
+    $\bullet$ Sum of squares for Regression ($SSR$)
+
+    $\bullet$ Sum of squares Total ($TSS$)
+:::
+
+In our case we want to model $y$ as a function of $x$. In 'R' the formula for this looks like
+
+```{r}
+formula(y~x)
+```
+
+A linear regression model in 'R' is called using the **L**inear **M**odel, i.e., `lm()`
+
+```{r}
+model <- lm(y~x)
+# "model <- lm(yx)" in R creates a linear regression model object and assigns it to the variable "model". The right-hand side of the assignment operator " <- " is the linear regression model, which is created using the "lm" function. The argument to the "lm" function, "yx", specifies the dependent variable "y" and the independent variable "x" for the model, with the tilde symbol "~" indicating the relationship between the variables.After this line of code is executed, the "model" object will contain information about the fitted regression model, including the estimated coefficients, residuals, and information about the fit of the model. The "model" object can then be used to make predictions, extract information about the fit, or perform hypothesis tests on the parameters.
+```
+
+\-\--
+
+#### What are the null and alternate hypothesis for a regression model?
+
+Let's take a step back and think about what our objective is:
+
+We want to find the best linear model to fit $y\sim x$
+
+Null hypothesis is that:
+
+There is no linear relationship between $y$ and $x$.
+
+What does this mean in terms of $\beta_0$ and $\beta_1$?
+
+This means that $\beta_1 = 0$ in $H_0$
+
+The null hypothesis in a linear regression model of the form "y\~x" is typically that the coefficients of the independent variable(s) are equal to zero. In other words, the null hypothesis states that there is no linear relationship between the dependent variable "y" and the independent variable "x".
+
+The goal of the regression analysis is to test the null hypothesis and determine if there is sufficient evidence to reject it, implying that there is a significant linear relationship between "y" and "x". This is typically done through hypothesis tests on the estimated coefficients, where the null hypothesis is that the coefficient is equal to zero, and the alternative hypothesis is that it is different from zero. If the null hypothesis is rejected, then it is concluded that the corresponding variable has a significant effect on the dependent variable.
+
+The alternate hypothesis is that $\beta_1 \neq0$
+
+\*\*To summarize:\*\*
+
+$$
+H_0: \beta_1 = 0, H_1: \beta_1 \neq 0
+$$
+
+($H_0$ is with respect to Null Hypothesis where as $H_1$ is with respect to alternate Hypothesis.)
+
+When we see a small value $p$-value, then we reject the null hypothesis in favor of the alternate hypothesis. What is the implication of this w.r.t. the original model objective?
+
+\*\* There is a significant relationship between $y$ and \$x\$. Or, in more mathematical terms, there is significant evidence in your favor of correlation between $x$ and $y$\*\*
+
+This is what the $p$-value in the model output are capturing. We can also use the `kable` function to print the results nicely:
+
+```{r}
+library(broom)
+model %>% # summary(model): This function generates a summary of the linear regression model stored in the "model" object. The summary includes information such as the coefficient estimates, standard errors, t-values, and p-values for each predictor in the model.
+broom::tidy()%>% # broom::tidy(): The "tidy" function from the "broom" package is used to convert the model summary into a data frame in a tidy format. This makes it easier to manipulate the data in a way that is consistent with the "tidy data" principles.
+# round(., digits = 2)
+knitr::kable() # knitr::kable(): The "kable" function from the "knitr" package is used to create a nicely formatted table from the data frame generated by the "tidy" function. This table is meant to be displayed in an R Markdown document and is created using the knitr engine.
+```
+
+We have the following terminology for different components of the model.
+
+1.  Covariate: $x$
+
+    ```{r}
+    head(x)
+    ```
+
+2.  Response: $y$
+
+    ```{r}
+    head(y)
+    ```
+
+3.  Fitted values: $\hat{y}$
+
+```{r}
+# Fitted values, also known as predicted values or hat values, are values that are predicted by a statistical model. In the context of a linear regression model, fitted values are the values that the model predicts for the response variable based on the values of the predictor variables.
+
+yhat <- fitted(model)
+```
+
+4.  Residuals: $e=y - \hat{y}$
+
+    ```{r}
+    res <- residuals(model) # res <- residuals(model): This line calculates the residuals of the linear regression model stored in the "model" object and assigns them to an object named "res".
+    head(res) # head(res): This line displays the first six elements of the "res" object, which contains the residuals of the linear regression model. The "head" function is used to display only the first few elements of the object, rather than the entire list of residuals. This can be useful for checking the first few residuals to ensure that they look reasonable.
+
+    ```
+
+Some of the other important terms are of the following:
+
+1.  Sum of squares for residuals ($RSS$):
+
+$SS_{Res} = \sum_{i=1}^n e_i^2 = \sum_{i=1}^n (y_i - \hat{y}_i^2)$ where $y_{i}$ is the observed value and $\hat {y_i}$ is the fitted value
+
+In the context of a linear regression model, the sum of squares for residuals is calculated as the sum of the squared differences between the observed values of the response variable and the fitted values (predicted values) generated by the model. The sum of squares for residuals can be used to evaluate the goodness of fit of the model and to compare the performance of different models.
+
+2.  Sum of squares for regression ($SSR$):
+
+$SS_{Res} = \sum_{i=1}^n (\hat{y}_i - \bar{y})^2$ where $\hat{y_i}$ = fitted value value and $\bar{y}$ = mean of the response variable.
+
+The sum of squares for regression (also known as the explained sum of squares) is a measure of the total variability in the response variable that is explained by the predictor variables in a regression model. It is calculated as the sum of the squared differences between the observed values of the response variable and the mean of the response variable, and is used to evaluate the goodness of fit of the regression model.
+
+3.  Sum of squares Total ($TSS$):
+
+$SS_{Tot} = \sum_{i=1}^n ({y}_i - \bar{y})^2$ where $y_i$ is the observed value and $\bar{y}$ is the mean of the response variable
+
+The sum of squares for regression is related to the total sum of squares (TSS), which is the sum of the squared differences between the observed values of the response variable and the mean of the response variable. The TSS represents the total variability in the response variable, and the sum of squares for residuals (RSS) represents the variability in the response variable that is not explained by the regression model. The difference between TSS and SSR gives the residual sum of squares (RSS): $TSS = SSR + RSS$
+
+Another important summary in the model output is the $R^2$ value, which is given as follows:
+
+$$
+R^2 = \frac{SS_{Reg}}{SS_{Tot}}
+$$
+
+The R-squared value is a measure of how much of the variability in the response variable can be explained by the independent variables in the regression model. A high R-squared value indicates that the independent variables are explaining a large portion of the variability in the response variable, while a low R-squared value indicates that the independent variables are explaining only a small portion of the variability.In the context of regression analysis, variability refers to the spread or dispersion of the values in the dependent variable (also called the response variable). Variability in the response variable indicates the amount of variation or differences in the values of the response variable.
+
+Lets have a look at what this means in the following examples. I'm going to create the following synthetic examples:
+
+```{r}
+x <- seq(0, 5, length = 100)
+# x <- seq(0, 5, length = 100): This line of code creates
+#a new object x that is assigned the value of a sequence
+#of numbers generated using the seq function.
+
+# seq(0, 5, length = 100): The seq function generates a
+#sequence of numbers, with 0 and 5 representing the start
+#and end of the sequence, respectively. The length = 100
+#argument specifies the number of numbers in the sequence.
+
+
+b0 <- 2
+b1 <- 1
+
+y1 <- b0 + b1 * x + rnorm(100) #This line of code creates
+# a new vector y1 by summing the values of b0, b1 * x, and #rnorm(100).
+
+# b0 and b1 are the intercept and slope coefficients of 
+# the regression line, respectively. They represent the 
+# expected value of y when x is 0 and the rate of change # of y with respect to x, respectively.
+
+# x is the vector of independent variable values created # earlier with x <- seq(0, 5, length = 100)
+ 
+# x is the vector of independent variable values created
+# earlier with x <- seq(0, 5, length = 100)
+
+# rnorm(100) generates a vector of 100 random values from
+# a normal distribution with a mean of 0 and a standard 
+# deviation of 1. These random values represent the error # term in the regression model, representing the 
+# difference between the true values of y and the values # predicted by the regression line.
+
+# The resulting y1 vector represents a simple linear 
+# regression model with normally distributed error terms,
+# where the values of y are a linear combination of the 
+# values of x and the random error terms. The values of
+y1 # represent the observed values of the response 
+#variable, #and the regression model can be used to 
+#estimate the #coefficients b0 and b1 and make
+#predictions about the #values of y based on the values
+#of x.
+
+y2 <- b0 + b1 * x + rnorm(100) * 3 # y1 <- b0 + b1 * x +
+#rnorm(100) * 3: This line of code creates a new vector
+#y1 by summing the values of b0, b1 * x, and rnorm(100) *
+#3.
+
+#b0 and b1 are the intercept and slope coefficients of
+#the regression line, respectively. They represent the
+#expected value of y when x is 0 and the rate of change
+#of y with respect to x, respectively.
+
+# x is the vector of independent variable values created
+#earlier with x <- seq(0, 5, length = 100).
+
+# rnorm(100) generates a vector of 100 random values from
+#a normal distribution with a mean of 0 and a standard
+#deviation of 1. These random values represent the error
+#term in the regression model, representing the
+#difference between the true values of y and the values
+#predicted by the regression line.
+
+# rnorm(100) * 3 scales the standard deviation of the
+#normal distribution from 1 to 3. This means that the
+#error terms in the regression model will have a standard
+#deviation of 3, rather than 1.
+
+# The resulting y1 vector represents a simple linear
+#regression model with normally distributed error terms,
+#with a standard deviation of 3, where the values of y
+#are a linear combination of the values of x and the
+#people random error terms. The values of y1 represent
+#the observed values of the response variable, and the
+#regression model can be used to estimate the
+#coefficients b0 and b1 and make predictions about the
+#values of y based on the values of x.
+
+par(mfrow = c(1,2)) # The code par(mfrow = c(1,2)) sets
+#the layout of the plotting region in R. It is used in
+#conjunction with plotting functions, such as plot(). The
+#mfrow argument in par() stands for "multiple figures row
+#-wise", and it specifies the layout of the plotting
+#region in terms of the number of rows and columns. The
+#argument c(1,2) means that the plotting region should be
+#split into 1 row and 2 columns. This is useful when you
+#want to plot multiple plots in the same window, side by
+#side, with each plot occupying a different region of the
+#plotting region.
+
+plot(x, y1)
+plot(x, y2)
+```
+
+The summary for model1 is :
+
+```{r}
+#summary(model1)
+```
+
+The summary for model2 is:
+
+```{r}
+#summary(model2)
+```
+
+Lets go back to the poverty dataset
+
+```{r}
+x <- df$povpct # The code x <- df$povpct creates a new
+#object x in R and assigns to it the values from the
+#povpct column of a data frame df. The $ operator is used
+#to extract a specific column from a data frame. So, in
+#this code, the values from the povpct column of the df
+#data frame are being extracted and assigned to the new
+#object x.
+y <- df$brth15to17
+plt()
+```
+
+Suppose we have a "new" state formed whose `povpct` value is $22$
+
+```{r}
+plt()
+abline(v = 21, col = "green") #The abline() function in R
+#is used to add one or more straight lines to a plot. In
+#the code abline(v = 21, col = "green"), the v = 21
+#argument specifies the position of the vertical line
+#along the x-axis and the col = "green" argument sets the
+#color of the line to green.So, this piece of code adds a
+#green vertical line to the plot at the x-coordinate
+#value of 21. This can be used to highlight a specific
+#point on the x-axis or to indicate a threshold or
+#reference value.
+lines(x, fitted(lm(y~x)), col = 'green') #The lines() #function in R is used to add a line segment to an
+#existing plot. In the code lines(x, fitted(lm(y~x)), col
+#= 'green'), the x argument specifies the x-coordinates
+#of the points to be connected by the line, fitted(lm(y~x
+#)) specifies the y-coordinates of the points, and col =
+#'green' sets the color of the line to green.This piece
+# of code fits a linear regression model using the lm()
+# function to the data with y as the response variable
+# and x as the predictor variable. The fitted() function # is used to extract the fitted values from the linear #regression model. Then, the lines() function is used to #add a green line segment connecting the fitted values to #the plot. This line segment represents the estimated #regression line based on the fitted linear regression #model.
+```
+
+What is the best guess for this prediction going to be?
+
+We could consider ...
+
+and our best prediction is going to be the intersection. In `R` we can use the `predict()` function to do this:
+
+```{r}
+new_x <- data.frame(x = c(1:21))
+new_y <- predict(model , new_x)
+# These two lines of code in R are creating a new data
+#frame called new_x and computing the predicted values of
+#y based on the linear regression model model for the new
+#value of x in new_x. The line new_x <- data.frame(x = c#(21)) creates a data frame with a single column x that
+#contains the value 21. The line new_y <- predict(model ,
+#new_x) uses the predict() function to compute the #predicted y values for the given x values in new_x based #on the linear regression model model.
+
+new_y
+```
+
+This is what the plot looks like:
+
+```{r}
+plt()
+for(a in new_x){abline(v = a, col = "green")}
+lines(x, fitted(lm(y~x)), col = 'red')
+points(new_x$x %>% unlist(), new_y %>% unlist(), col = 'purple') # This line of code is plotting the new #predicted values of y as a single point on the current 
+#plot, using the points() function. The arguments new_x 
+#and new_y are the x and y values for the predicted 
+#points, respectively. The argument col = 'purple' 
+#specifies that the color of the plotted points should be #purple. This line of code adds a single purple point to 
+#the current plot, which represents the predicted values 
+#of y for the given x values in new_x based on the linear #regression model model.
+```
