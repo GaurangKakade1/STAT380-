@@ -1,0 +1,393 @@
+---
+title: "Weekly 9 Summary "
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+#format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, March 21
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Decision Boundary, classification accuracy, confusion matrix
+2.  Multinomial logistic regression
+3.  Generalize using a neural network with one hidden layer.
+:::
+
+```{R}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    "glmnet",
+    "caret",
+    "car",
+    "corrplot",
+    "repr",
+    "tidyverse",
+    "torch",
+    # NEW
+    "nnet"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+```
+
+## Decision Boundary
+
+```{R}
+library(class)
+X <- t(replicate(100, runif(2)))
+y <- ifelse(apply(X, 1, sum) + 0.1 * rnorm(100) <= 1, 0, 1) %>% as.factor()
+col <- ifelse(y == 0, "blue", "red")
+
+plot(X[,1], X[,2], col = col)
+```
+
+1.  **`library(class)`**: This line loads the **`class`** library, which contains functions for classification, such as k-Nearest Neighbors. However, it is not used in the provided code.
+
+2.  **`X <- t(replicate(100, runif(2)))`**: This line generates a 100x2 matrix **`X`** with random uniform values between 0 and 1. Here's the breakdown:
+
+    -   **`runif(2)`**: Generates a vector of 2 random uniform values between 0 and 1.
+
+    -   **`replicate(100, runif(2))`**: Replicates the above vector 100 times, creating a 2x100 matrix.
+
+    -   **`t(replicate(100, runif(2)))`**: Takes the transpose of the matrix, resulting in a 100x2 matrix **`X`**.
+
+3.  **`y <- ifelse(apply(X, 1, sum) + 0.1 * rnorm(100) <= 1, 0, 1) %>% as.factor()`**:
+
+    This line computes a binary response variable **`y`** based on the sum of the two columns of matrix **`X`** with some added noise:
+
+    -   **`apply(X, 1, sum)`**: This function applies the **`sum`** function across the rows (specified by **`1`**) of the matrix **`X`**. It calculates the row-wise sum of the two columns of **`X`**.
+
+    -   **`0.1 * rnorm(100)`**: This generates a vector of 100 random normal values with a mean of 0 and a standard deviation of 0.1 (due to the multiplication by 0.1).
+
+    -   **`apply(X, 1, sum) + 0.1 * rnorm(100)`**: This adds the random noise to the row-wise sum of **`X`**.
+
+    -   **`apply(X, 1, sum) + 0.1 * rnorm(100) <= 1`**: This creates a logical vector with **`TRUE`** when the noisy sum is less than or equal to 1, and **`FALSE`** otherwise.
+
+    ```{R}
+    df <- data.frame(y=y, x1=X[,1], x2 = X[,2])
+    model <- glm(y~., df, family = binomial())
+    summary(model)
+    ```
+
+    **`df <- data.frame(y=y, x1=X[,1], x2 = X[,2])`**: This line creates a data frame named **`df`** with three columns: **`y`**, **`x1`**, and **`x2`**. The **`y`** column contains the response variable (class labels) generated earlier, while the **`x1`** and **`x2`** columns contain the values from the first and second columns of the matrix **`X`**. The data frame is a convenient format for organizing the data for analysis. **`model <- glm(y ~ ., df, family = binomial())`**: This line fits a logistic regression model to the data using the **`glm`** (Generalized Linear Model) function. The formula **`y ~ .`** specifies that the response variable **`y`** should be modeled as a function of all other variables in the data frame **`df`** (in this case, **`x1`** and **`x2`**). The **`family = binomial()`** argument indicates that a binomial family with a logit link should be used, which is suitable for logistic regression with binary outcome variables.
+
+```{R}
+xnew <- data.frame(
+    x1 = rep(seq(0, 1, length.out = 50), 50),
+    x2 = rep(seq(0, 1, length.out = 50), each = 50)
+)
+
+plot(xnew[, 1], xnew[, 2])
+
+prob <- predict(model, xnew, type = "response")
+decision <- ifelse(prob < 0.5, "blue", "red")
+
+plot(xnew[,1], xnew[,2], col = decision, pch = 22)
+points(X[,1], X[,2], col = col, pch = 20)
+```
+
+## Confusion Matrix
+
+```{R}
+idx <- sample(1:nrow(df), 10)
+train <- df[-idx, ]
+test <- df[idx, ]
+
+model <- glm(y~., train, family = binomial())
+probs <- predict(model, test, type = "response")
+```
+
+1.  **`idx <- sample(1:nrow(df), 10)`**: This line selects a random sample of 10 row indices from the data frame **`df`**. The **`sample()`** function is used to draw 10 indices without replacement from the range **`1`** to the total number of rows in **`df`** (i.e., **`nrow(df)`**).
+
+2.  **`train <- df[-idx, ]`**: This line creates a new data frame named **`train`** by excluding the randomly sampled rows specified by the indices in **`idx`**. The **`-idx`** in the row index position of **`df`** selects all rows except those with the indices in **`idx`**. This new data frame will be used as the training set.
+
+3.  **`test <- df[idx, ]`**: This line creates another new data frame named **`test`** containing only the rows specified by the indices in **`idx`**. This data frame will be used as the test set.
+
+4.  **`model <- glm(y ~ ., train, family = binomial())`**: This line fits a logistic regression model to the training set using the **`glm`** function. The formula **`y ~ .`** specifies that the response variable **`y`** should be modeled as a function of all other variables in the data frame **`train`** (in this case, **`x1`** and **`x2`**). The **`family = binomial()`** argument indicates that a binomial family with a logit link should be used, which is suitable for logistic regression with binary outcome variables.
+
+5.  **`probs <- predict(model, test, type = "response")`**: This line uses the fitted logistic regression model to predict probabilities for the test set. The **`predict()`** function takes the **`model`** object, the **`test`** data frame, and specifies the **`type = "response"`** argument to return predicted probabilities instead of the default linear predictor values (i.e., log-odds). The predicted probabilities are stored in a vector named **`probs`**.
+
+```{R}
+predicted <- ifelse(probs < 0.5, 0, 1)
+expected <- test$y
+table(predicted, expected)
+```
+
+```{R}
+caret::confusionMatrix(data=as.factor(predicted), reference=as.factor(expected))
+```
+
+### 1: Multinomial Logistic Regression
+
+In this section, we will introduce the concept of classification problems and multinomial classification. We also highlight the importance of multinomial classification in data science.
+
+```{R}
+# Load the necessary libraries
+library(tidyverse)
+
+# Load the iris dataset from the datasets package
+data("iris")
+
+# Create a binary classification problem
+binary_data <- iris %>%
+  filter(Species != "setosa") %>%
+  mutate(Species = ifelse(Species == "versicolor", "versicolor", "virginica"))
+  
+# Visualize the binary classification problem
+ggplot(binary_data, aes(x = Petal.Length, y = Petal.Width, color = Species)) + 
+  geom_point(size = 2) + 
+  theme_minimal() + 
+  ggtitle("Binary Classification Problem")
+```
+
+### 1.2 Softmax function
+
+Similar to the sigmoid function $\sigma(x)$ used in logistic regression, for multinomial logistic regression we have the following function
+
+$$
+\boxed{
+soft-max(x_1, x_2,\dots,x_k) = 
+(\frac{e^{x_1}}{\sum_{i=1}^k e{x_i}},
+\frac{e^{x_2}}{\sum_{i=1}^k e{x_i}}, \dots,
+\frac{e^{x_k}}{\sum_{i=1}^k e{x_i}})
+}
+$$
+
+This is a generalization of the arg max function which is given by
+
+$$
+\arg \max(x_1, x_2, \dots, x_i, \dots, x_{k}) = (0, 0, \dots, 1, \dots, 0)
+$$
+
+if $x_i$ is the maximum of $\{x_1, x_2, \dots, x_k\}$
+
+For example
+
+$$
+soft-\max(1,2,8) \approx (0.001, 0.002, 0.997) \\
+\arg \max(1,2,8) \approx (0,0,1)
+$$
+
+If we have only two classes {0,1} then
+
+$$
+soft-\max(0,x) = (\frac{1}{1+e^x}, \frac{e^x}{1 + e^x}) = (1 - \sigma(x), \sigma(x))
+$$
+
+Therefore, the soft-max() can be interpreted as the probabilities associated with each of the input k classes. Given covariates $x$ and response $y \in \{1, 2, \dots, k\}$ the multinomial logistic regression problem gives you.
+
+### 1.3 Example
+
+```{R}
+sample(1:3, size = 1000, replace = TRUE, prob = c(0.8, 0.1, 0.1))
+# %>% hist(x, freq = T)
+```
+
+```{R}
+b <- c(-5, 0, 5)
+prob_function = \(x) exp(b*x) / sum(exp(b*x))
+```
+
+```{R}
+x <- rnorm(10000)
+y <- c()
+for (i in 1:length(x)) {
+    y[i] <- sample(0:2, 1, prob = prob_function(x[i]))
+}
+cbind(x, y) %>% head
+```
+
+```{R}
+data.frame(x=x, z = rep(0, length(x)), y = y) %>% ggplot(aes(x=x, y=z, colour = factor(y))) + geom_point()
+```
+
+```{R}
+df <- data.frame(x=x, y = as.factor(y))
+df$y <- relevel(df$y, ref = "1")
+df$y
+```
+
+```{R}
+model <- nnet::multinom(y~x, df)
+summary(model)
+```
+
+### Thursday, Jan 19
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Classification (decision) tree
+2.  Support vector machine
+3.  Neural Network with 1 hidden layer
+:::
+
+Consider the following dataset
+
+```{R}
+n <- 2500
+X <- t(replicate(n, 2* runif(2)-1))
+y <- ifelse(apply(X, 1, \(x) sum(sign(x + 0.01 * rnorm(2)))) != 0, 0, 1) %>% as.factor()
+
+col <- ifelse(y == 0, "blue", "red")
+plot(X[,1], X[,2], col = col, pch = 19)
+```
+
+```{R}
+df <- data.frame(y=y, x1 = X[, 1], x2 = X[, 2])
+model <- glm(y ~x1 + x2, df, family = binomial())
+f_logistic = \(x) predict(model, data.frame(x1 = x[,1], x2 = x[,2]), type = "response")
+```
+
+```{R}
+xnew <- cbind(
+    rep(seq(-1.1, 1.1, length.out = 50), 50),
+    rep(seq(-1.1, 1.1, length.out = 50), each = 50)
+    
+)
+```
+
+```{R}
+plt <- function(f, x){
+    plot(x[,1], x[,2], col = ifelse(f(x) < 0.5, "blue", "red"), pch = 22)
+    points(df$x1, df$x2, col = ifelse(y == "0", "blue", "red"), pch = 19)
+}
+
+overview <- function(f){
+    predicted <- ifelse(f(df[,-1]) < 0.5, 0, 1)
+    actual <- df[,1]
+    table(predicted, actual)
+}
+```
+
+```{R}
+overview(f_logistic)
+```
+
+### Classification (decision) tree
+
+`Classification trees` are commonly used in machine learning to predict categorical outcomes. They are a hierarchical model model that recursively partitions data into smaller subsets based on the most informative features, and each partition is associated with a class label.
+
+```{R}
+library(rpart)
+library(rpart.plot)
+
+dtree <- rpart(y ~ x1 + x2, df, method = "class")
+rpart.plot(dtree)
+```
+
+```{R}
+predict(dtree, data.frame(x1=xnew[,1], x2=xnew[,2]), type = "class")
+```
+
+```{R}
+f_dtree <- \(x) as.numeric(predict(dtree, data.frame(x1 = x[,1], x2 = x[,2]), type = "class")) - 1
+plt(f_dtree, xnew)
+```
+
+```{R}
+overview(f_dtree)
+```
+
+### Support vector machine
+
+Consider the following dataset
+
+```{R}
+n <- 750
+X <- t(replicate(n, 2*runif(2)-1))
+y <- ifelse(apply(X, 1, \(x) sum(abs(x))) + 0.1 * rnorm(n) <= 1, 0, 1) %>% as.factor()
+col <- ifelse(y == 0, "blue", "red")
+df <- data.frame(y=y, x1 = X[,1], x2 = X[,2])
+
+plot(X[,1], X[,2], col = col, pch = 19)
+```
+
+#### Logistic Regression
+
+```{R}
+model <- glm(y ~ x1 + x2, df, family = binomial())
+f_logistic = \(x) predict(model, data.frame(x1 = x[,1], x2 = x[,2]), type = "response")
+
+plt(f_logistic, xnew)
+```
+
+```{R}
+overview(f_logistic)
+```
+
+#### Classification tree
+
+```{R}
+dtree <- rpart(y ~ x1 + x2, df, method = "class")
+rpart.plot(dtree)
+
+f_dtree <- \(x) as.numeric(predict(dtree, data.frame(x1 = x[,1], x2 = x[,2]), type = "class")) - 1
+plt(f_dtree, xnew)
+```
+
+```{R}
+overview(f_dtree)
+```
+
+#### Support Vector machine
+
+```{R}
+library(e1071)
+```
+
+```{R}
+?svm
+```
+
+```{R}
+svm_model <- svm(y ~ x1 + x2, df, kernel = "sigmoid")
+summary(svm_model)
+```
+
+```{R}
+predict(svm_model, xnew)
+f_svm <- \(x) predict(svm_model, x) %>% as.numeric() - 1
+plt(f_svm, xnew)
+```
+
+### Neural Network with 1 hidden layer
+
+```{R}
+library(torch)
+module <- nn_module(
+  initialize = function() {
+    self$f <- nn_linear(2, 20)
+    self$g <- nn_linear(20,1)
+    self$h <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>% 
+      self$f() %>%
+      self$g() %>%
+      self$h()
+  }
+)
+
+```
