@@ -1,0 +1,842 @@
+---
+title: "Weekly Summary 7"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+#format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+```{r}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    # New packages
+    "glmnet",
+    "caret",
+    "car",
+    "corrplot",
+    "repr"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+```
+
+```{r}
+library(ISLR2)
+attach(Boston)
+
+df <- Boston %>% 
+    mutate(chas = as.factor(chas))
+head(df)
+head(Boston)
+
+null_model <- lm(medv ~ 1, df)
+full_model <- lm(medv ~ ., df)
+
+library(caret)
+
+forward_model <- step(null_model, direction = "forward", scope=formula(full_model))
+
+backward_model <- step(full_model, direction = "backward", scope=formula(full_model))
+
+selected_model <- step(full_model, direction = "both", scope=formula(full_model))
+```
+
+## Tuesday, 21st Feb
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Regularization / Shrinkage Estimators
+2.  Gradient Descent and how to calculate Gradient Descent
+3.  Automatic Differentiation
+:::
+
+### Regularization / Shrinkage Estimators
+
+Regularization achieves a similar objective using a slightly different strategy. To see this, let's look at the objective function of the standard regression task:
+
+$$
+y = \beta_{0} + \beta_1 x_1 + \beta_p x_p + \epsilon
+$$
+
+Recall that the least-squares objective selects the model with the smallest residual standard error, i.e.,
+
+$$
+L(\beta_0 + \beta_1, \dots, \beta_p) = SS_{Res} = \sum_{i=1}^n (y_i - \beta_0 - \beta_1 x_{1, i} - \dots \beta_p x_{p,i})^2
+$$
+
+The solution to this problem is denoted as follows:
+
+$$
+(b_1, b_2,\dots, b_p) = \mathop{\arg\min} \limits_{\beta_1 \dots \beta_p} L(\beta_1, \beta_2,\dots,\beta_p)
+$$
+
+If we want to select only a subset of these variables in our final model, we can include a penalty term
+
+$$
+p_\lambda(\beta_1,\dots,\beta_p)
+$$
+
+which \*\* favors solutions which select smaller subsets of the variables. In this setting , the objective function becomes
+
+$$
+\boxed{
+L_\lambda(\beta_0, \beta_1, \dots, \beta_p) = L(\beta_0, \beta_2, \dots, \beta_p) + p_\lambda(\beta_1, \dots, \beta_p)}
+$$
+
+The most common penalty functions include:
+
+1.  Ridge regression where
+
+    $$
+    p_\lambda = \lambda ||\beta||_2^2 = \lambda \times (\beta_1^2 + \beta_2^2 + \dots + \beta_p^2)
+    $$
+
+2.  Lasso Regression where
+
+    $$
+    p_\lambda = \lambda ||\beta||_1 = \lambda \times (|\beta_1| + |\beta_2| + \dots + |\beta_p|)
+    $$
+
+3.  General case in `glmnet()`
+
+    $$
+    p_\lambda = \lambda \times (\alpha||\beta||_1 + \frac{1 - \alpha}{2} ||\beta||_2^2)
+    $$
+
+here `alpha = 1` corresponds to LASSO and `alpha = 0` corresponds to ridge regression.
+
+In both cases, we can see that we want to find a solution which:
+
+> Minimizes $SS_{Res}$, and
+>
+> Minimizes $p_\lambda$
+
+which means we want to find a solution which favors that sparser solutions
+
+In `R` and `glmnet` library exports functions for performing penalized regression.
+
+Unlike `lm()` the `glmnet` function doesn't take in a formula.
+
+glmnet (X,y) X: matrix of the covariates, y: response vector
+
+```{r}
+X <- model.matrix(full_model)[,-1]
+head(X)
+```
+
+The code is creating a design matrix **`X`** for the full model by calling the **`model.matrix()`** function on **`full_model`** and removing the first column, which corresponds to the intercept term. The **`model.matrix()`** function converts categorical variables to indicator variables, and the resulting matrix includes columns for each level of the categorical variables as well as the continuous variables.
+
+**`[,-1]`** is used for subsetting the **`model.matrix(full_model)`** object. Here, the **`-1`** is used to exclude the intercept term from the matrix. The comma before **`-1`** indicates that we are subsetting all rows of the matrix. So **`[,-1]`** essentially means that we are selecting all rows but the first column of the **`model.matrix(full_model)`** object.
+
+As an extra pre-processing step, it's always recommended to `scale` all the numeric entries of the matrix `X` so that they are on the same scale.
+
+```{r}
+all_cols <- 1:ncol(X)
+drop_scale <- c(4)
+include_scale <- all_cols[-drop_scale]
+
+for (i in include_scale) { X[,i] <- scale(X[, i]) }
+head(X)
+```
+
+`Explaination of the above code`
+
+-   **`all_cols <- 1:ncol(X)`**: creates a vector **`all_cols`** containing the column indices of **`X`**
+
+-   **`drop_scale <- c(4)`**: creates a vector **`drop_scale`** containing the column index to be dropped
+
+-   **`include_scale <- all_cols[-drop_scale]`**: creates a new vector **`include_scale`** containing all the column indices except the one specified in **`drop_scale`**
+
+-   **`for (i in include_scale) { X[,i] <- scale(X[, i]) }`**: loops through the indices in **`include_scale`**, standardizes the values in each column of **`X`** using the **`scale()`** function, and updates the corresponding columns in **`X`** with the standardized values. The resulting **`X`** is a matrix where all the columns except the one specified in **`drop_scale`** have been standardized. The **`head(X)`** function call is used to display the first few rows of the updated matrix.
+
+```{r}
+y <- df$medv
+```
+
+```{r}
+library(glmnet)
+lasso <- cv.glmnet(X, y, aplha = 1)
+```
+
+-   **`library(glmnet)`** loads the **`glmnet`** package into the R session.
+
+-   **`cv.glmnet()`** is a function from the **`glmnet`** package that performs cross-validation for fitting the Lasso model with a range of values for the tuning parameter **`lambda`**.
+
+-   **`X`** is the predictor matrix that was constructed earlier using **`model.matrix()`**.
+
+-   **`y`** is the response variable.
+
+-   **`alpha`** is the elastic net mixing parameter that controls the tradeoff between the L1 (lasso) and L2 (ridge) penalties. Here, **`alpha=1`** indicates that we are performing pure Lasso regression.
+
+-   **`lasso`** is an object that stores the results of the cross-validation procedure. It includes information such as the optimal value of **`lambda`**, the corresponding values of the regression coefficients, and the mean squared error (MSE) of the model on the validation set.
+
+```{r}
+plot(lasso)
+```
+
+```{r}
+lambdas <- 10 ^ seq(-2, 0, length.out = 1000)
+lasso <- cv.glmnet(X, y, alpha = 1, lambda = lambdas)
+plot(lasso)
+```
+
+-   **`lambdas <- 10 ^ seq(-2, 0, length.out = 1000)`** creates a sequence of 1000 lambda values from 10\^-2 to 1 (i.e., 0.01 to 1) on a log scale and saves them in the **`lambdas`** variable.
+
+-   **`lasso <- cv.glmnet(X, y, alpha = 1, lambda = lambdas)`** fits a Lasso regression model with cross-validation (**`cv.glmnet()`**) using the predictors matrix **`X`** and response variable **`y`**, setting the **`alpha`** parameter to 1 (to fit a Lasso model), and specifying the sequence of lambda values **`lambdas`**.
+
+-   **`plot(lasso)`** plots the cross-validation results, showing the mean cross-validated error on the y-axis and the log(lambda) values on the x-axis. It also shows vertical bars at the optimal lambda values chosen by the cross-validation procedure, indicating the range of lambda values that produces the lowest cross-validated error.
+
+    ```{r}
+    lasso_coef <- coef(lasso, s = "lambda.1se")
+    selected_vars <- rownames(lasso_coef)[which(abs(lasso_coef) > 0)][-1] # exclude the intercept term
+
+    lasso_coef
+    ```
+
+-   **`lasso_coef <- coef(lasso, s = "lambda.1se")`**: The code retrieves the coefficients of the Lasso regression model at the optimal lambda value, determined using cross-validation. The argument **`s = "lambda.1se"`** specifies that the value of lambda that provides the most regularized model (i.e., with the fewest non-zero coefficients) among those whose cross-validation error is within one standard error of the minimum should be selected. The resulting coefficients are stored in **`lasso_coef`**.
+
+-   **`selected_vars <- rownames(lasso_coef)[which(abs(lasso_coef) > 0)][-1]`**: The code extracts the names of the predictors with non-zero coefficients in the Lasso model. **`rownames(lasso_coef)`** retrieves the names of the predictors, **`which(abs(lasso_coef) > 0)`** returns the indices of the coefficients that are not equal to zero, and **`[-1]`** removes the intercept term from the list of selected variables, since it is always included in the model. The resulting variable names are stored in **`selected_vars`**.
+
+```{r}
+selected_vars
+```
+
+```{r}
+# full model <- lm(medv ~ ., data = df)
+lasso_model <- lm(y~X[, selected_vars])
+```
+
+This code fits a linear regression model using the variable **`y`** as the response and the subset of predictors selected by the Lasso model stored in **`selected_vars`**. Specifically, it subsets the columns of **`X`** corresponding to the selected variables using **`X[, selected_vars]`** and fits a linear model with **`y`** using the **`lm()`** function. The resulting model is stored in **`lasso_model`**.
+
+```{r}
+broom::tidy(lasso_model)
+```
+
+The **`broom::tidy()`** function extracts the model coefficients and related statistics from a model object and arranges them in a tidy data frame. In the case of **`lasso_model`**, **`broom::tidy()`** will extract the estimated coefficients, standard errors, t-values, and p-values for the linear regression model, where the response variable **`y`** is modeled as a function of the predictor variables specified in **`selected_vars`**.
+
+## Gradient Descent
+
+#### A general recipe for fitting models
+
+Recall that the solution to a regression problem is given by
+
+$$
+(b_1, b_2, \dots, b_p) =  \mathop{\arg\min} \limits_{\beta_1 \dots \beta_p} L(\beta_1, \beta_2,\dots,\beta_p)
+$$
+
+where $L(\beta_0, \beta_2, \dots, \beta_p)$ is referred to as the **loss function**. If we want to find the values of $(b_0, b_1, \dots, b_p)$ which minimize $L()$, then using the general principle from calculus, we are interested in looking for values such that
+
+$$
+\boxed{
+\frac{\text{d}}{\text{d}\beta_0} L(\beta_0, \beta_2, \dots, \beta_p) = 0
+\\
+\frac{\text{d}}{\text{d}\beta_1} L(\beta_0, \beta_2,\dots, \beta_p) = 0
+\\
+\frac{\text{d}}{\text{d}\beta_2} L(\beta_0, \beta_2,\dots, \beta_p) = 0
+\\
+\vdots
+\\
+\frac{\text{d}}{\text{d}\beta_p} L(\beta_0, \beta_2,\dots, \beta_p) = 0
+}
+$$
+
+In the case of linear regression, the derivatives can be computed by hand, and there exists a closed form solutions to the above system of equations.
+
+However, in many other models, we don't have a method for obtaining closed form solutions. In such cases, the general strategy is as follows:
+
+1.  Compute the gradient
+
+$$
+\nabla L(\beta_0, \beta_1, \dots, \beta_p) = (\frac{\text{d}L}{\text{d}\beta_0}, \frac{\text{d}L}{\text{d}\beta_1},\dots,\frac{\text{d}L}{\text{d}\beta_p})
+$$
+
+2.  Choose a step size $\eta \in (0,1)$
+
+3.  Perform gradient descent
+
+    $$
+    (b_0', b_1', b_2',\dots, b_p') = (b_0, b_1, b_2, \dots, b_p) - \eta \cdot \nabla L(\beta_0, \beta_1, \dots, \beta_p)
+    $$ or, in component form
+
+    $$
+    \boxed {
+    b_0' \leftarrow b_0 - (\eta \cdot \frac{\text{d}L}{\text{d}\beta_0})
+    \\
+    b_1' \leftarrow b_1 - (\eta \cdot \frac{\text{d}L}{\text{d}\beta_1})
+    \\
+    \vdots
+    \\
+    b_p' \leftarrow b_p - (\eta \cdot \frac{\text{d}L}{\text{d}\beta_p})
+    }
+    $$
+
+4.  Stop when the relative improvement is small, e.g.,
+
+    $$
+    |L(b_0', b_1', b_2', \dots, b_p') - L(b_0, b_1, b_2, \dots, b_p)| < 10^{-9}
+    $$
+
+    Let's see this in action for the following example for performing linear regression with the `cars` dataset
+
+```{r}
+# attach(cars)
+t(cars)
+```
+
+The function **`t()`** in R is used to transpose a matrix or a data frame. It switches the rows and columns of the input object. In the above case of **`t(cars)`**, **`cars`** is a built-in data frame in R which contains two variables, **`speed`** and **`dist`**, representing the speed of cars and the stopping distance in feet, respectively. So **`t(cars)`** will transpose the data frame **`cars`**, switching the rows and columns, resulting in a new data frame with the same values, but with the variables swapped as columns and rows.
+
+```{r}
+ggplot(cars) + 
+geom_point(aes(x = speed, y = dist)) + 
+stat_smooth(aes(x = speed, y = dist), formula = "y~x", method = "lm")
+```
+
+This code creates a scatter plot of the **`dist`** (stopping distance) variable against the **`speed`** variable from the **`cars`** dataset. The **`ggplot()`** function initializes the plot. The **`geom_point()`** function adds a layer of points to the plot, with the x-axis mapped to **`speed`** and the y-axis mapped to **`dist`**. The **`stat_smooth()`** function adds a layer of a fitted line to the plot using linear regression (**`method = "lm"`**). The **`formula`** argument specifies that the dependent variable is **`y`** (i.e., **`dist`**) and the independent variable is **`x`** (i.e., **`speed`**).
+
+\
+
+```{r}
+# define the loss function 
+
+Loss <- function(b, x, y){
+  squares <- (y-b[1] - b[2] * x)^2
+  return( sum(squares) )
+}
+b <- rnorm(2)
+Loss(b, cars$speed, cars$dist)
+  
+
+```
+
+This code defines a function called **`Loss`** that takes three arguments **`b`**, **`x`**, and **`y`**. The function calculates the sum of squared errors between the values predicted by the linear model **`b[1] + b[2]*x`** and the actual response variable **`y`** for the given values of **`x`** and **`y`**. The function returns this sum of squared errors.
+
+The next line of code initializes the vector **`b`** with two random values drawn from a standard normal distribution.
+
+Finally, the **`Loss()`** function is called with the **`b`** vector and the **`speed`** and **`dist`** columns of the **`cars`** dataset as arguments. The result is the sum of squared errors between the predicted values of the linear model and the actual **`dist`** values for the given **`speed`** values.
+
+\
+
+grad \<- function(b, Loss, x, y, eps = 1e-5){
+
+b0_up \<- Loss( c(b\[1\] + eps, b\[2\]), x, y)
+
+b0_dn \<- Loss( c(b\[1\] - eps, b\[2\]), x, y)
+
+b1_up \<- Loss( c(b\[1\], b\[2\] + eps), x, y)
+
+b1_dn \<- Loss( c(b\[1\], b\[2\] - eps), x, y)
+
+grad_b0_L \<- (b0_up - b0_dn) / (2 \* eps)
+
+grad_b1_L \<- (b1_up - b1_dn) / (2 \* eps)
+
+return( c(grad_b0_L, grad_b1_L) )
+
+}
+
+grad(b, Loss, cars\$speed, cars\$dist)
+
+```{r}
+# define a function to compute the gradients 
+grad <- function(b, Loss, x, y, eps = 1e-5){
+  b0_up <- Loss( c(b[1] + eps, b[2]), x, y)
+  b0_dn <- Loss( c(b[1] - eps, b[2]), x, y)
+  
+  b1_up <- Loss( c(b[1], b[2] + eps), x, y)
+  b1_dn <- Loss( c(b[1], b[2] - eps), x, y)
+  
+  grad_b0_L <- (b0_up - b0_dn) / (2 * eps)
+  grad_b1_L <- (b1_up - b1_dn) / (2 * eps)
+  
+  return( c(grad_b0_L, grad_b1_L) )
+  
+}
+grad(b, Loss, cars$speed, cars$dist)
+```
+
+The above code defines a function called **`grad()`** that computes the gradient of a given loss function with respect to the model parameters **`b`** (in this case, the intercept and slope). The function takes four arguments: **`b`** is a vector of the current parameter estimates, **`Loss`** is the loss function to be minimized, **`x`** and **`y`** are the input and output variables, and **`eps`** is a small value used to compute the finite difference approximation of the derivative.
+
+The function then computes the partial derivative of the loss function with respect to the intercept (**`b[1]`**) and the slope (**`b[2]`**) using the finite difference approximation. It returns a vector of the two partial derivatives.
+
+These lines of code are calculating the value of the loss function at **`b[1]+eps`** and **`b[1]-eps`**, respectively, and storing them in **`b0_up`** and **`b0_dn`**. The loss function takes in the current values of **`b`** (the coefficients of the linear regression model), as well as the values of **`x`** and **`y`**, and returns the sum of squared residuals. In this case, **`b`** is a vector of length 2, where **`b[1]`** represents the intercept and **`b[2]`** represents the slope. By calculating the loss function at **`b[1]+eps`** and **`b[1]-eps`**, the code is approximating the partial derivative of the loss function with respect to **`b[1]`**, which is the slope of the tangent line to the loss function at **`b[1]`**. This approximation is used to estimate the gradient of the loss function.
+
+These lines of code are calculating the loss for **`b`** with a small adjustment in the second component of **`b`** (i.e., the slope) in two different directions (up and down). **`b0_up`** and **`b0_dn`** correspond to the loss when **`b[1]`** (i.e., the intercept) is shifted up and down, respectively. **`b1_up`** and **`b1_dn`** correspond to the loss when **`b[2]`** (i.e., the slope) is shifted up and down, respectively.
+
+The final line of code calls the **`grad()`** function with the current parameter estimates **`b`** and the **`Loss`** function defined earlier, using the **`speed`** column of the **`cars`** data as the input variable **`x`** and the **`dist`** column as the output variable **`y`**.
+
+```{r}
+steps <- 10000
+L <- rep(Inf, steps)
+eta <- 1e-7
+b <- 10 * rnorm(2)
+
+for (i in 1:steps) {
+  b <- b - eta * grad(b, Loss, cars$speed, cars$dist)
+  L[i] <- Loss(b, cars$speed, cars$dist)
+}
+```
+
+-   **`steps <- 10000`** assigns the value 10000 to the variable **`steps`**.
+
+-   **`L <- rep(Inf, steps)`** creates a vector **`L`** of length **`steps`**, where each element is set to infinity.
+
+-   **`eta <- 1e-7`** assigns the value **`1e-7`** (i.e., 0.0000001) to the variable **`eta`**.
+
+-   **`b <- 10 * rnorm(2)`** generates a random vector of length 2 with values drawn from a standard normal distribution and multiplies it by 10 to get the starting values for the coefficients **`b`**.
+
+-   The **`for`** loop runs for **`steps`** iterations, where the coefficients **`b`** are updated using gradient descent to minimize the loss function defined in **`Loss`**.
+
+-   The updated coefficients are used to calculate the new value of the loss function, which is stored in the **`L`** vector.
+
+    ```{r}
+    options(repr.plot.width = 12, repr.plot.height = 7)
+    par(mfrow = c(1,2))
+
+    #Plot the final result
+    plot(dist ~ speed, cars, pch = 20, main = "Fitted Line")
+    abline(b, col = "red")
+
+    # Plot the change in loss function value
+    plot(L, type ="b", pch = 20, col = "dodgerblue", main = "Loss value")
+    ```
+
+    This code is creating a plot of the fitted line obtained from running the gradient descent algorithm on the **`cars`** dataset, as well as a plot of the change in the loss function value over the iterations of the algorithm.
+
+    The **`options()`** function is setting the plot dimensions.
+
+    The **`par()`** function is setting the plot layout to have one row and two columns.
+
+    The first plot is a scatter plot of the **`dist`** variable on the y-axis against the **`speed`** variable on the x-axis from the **`cars`** dataset, with the points represented as circles and the main title set to "Fitted Line". The **`abline()`** function is then used to plot the fitted line obtained from running the gradient descent algorithm on the same plot, with the color set to "red".
+
+    The second plot is a plot of the change in the loss function value over the iterations of the algorithm. The **`type`** argument is set to "b" to plot both points and lines, the **`pch`** argument is set to 20 to use filled circles as points, the color of the plot is set to "dodgerblue", and the main title is set to "Loss value".\
+    \
+
+    ```{r}
+    options(repr.plot.width=8, repr.plot.height=5)
+
+    steps <- 2000
+    L <- rep(Inf, steps)
+    eta <- 1e-7
+    b <- 10 * rnorm(2)
+
+    for (i in 1:steps){
+        b <- b - eta * grad(b, Loss, cars$speed, cars$dist)
+        L[i] <- Loss(b, cars$speed, cars$dist)
+        
+        if (i %% 100 == 0){
+            par(mfrow=c(1,2))
+            # Plot the final result
+            plot(dist ~ speed, cars, pch=20, main=paste("Fitted Line iter=", i))
+            abline(b, col="red")
+
+            # Plot the change in loss function value
+            plot(L, type="b", pch=20, col="dodgerblue", main="Loss value")
+        }
+    }
+    ```
+
+```{r}
+
+```
+
+    This code performs gradient descent algorithm for linear regression with one independent variable (**`speed`**) and one dependent variable (**`dist`**) on the **`cars`** dataset for a fixed number of iterations (**`steps`**). It updates the coefficients **`b`** of the linear regression model at each iteration using the gradient of the loss function with respect to **`b`**. The **`L`** vector records the value of the loss function at each iteration. The **`eta`** parameter is the learning rate. The code also creates plots of the fitted line and the loss function at regular intervals using the **`par`** and **`plot`** functions with various parameters. The **`%%`** operator checks if **`i`** is a multiple of 100 and if it is, the plots are updated.
+
+    \
+    **Automatic differentiation**
+
+    The cornerstone of modern machine learning and data-science is to be able to perform **automatic differentiation**, i.e., being able to compute the gradients for **any** function without the need to solve tedious calculus problems. For the more advanced parts of the course (e.g., neural networks), we will be using automatic differentiation libraries to perform gradient descent.
+
+    While there are several libraries for performing these tasks, we will be using the `pyTorch` library for this. The installation procedure can be found [here](https://cran.r-project.org/web/packages/torch/vignettes/installation.html)\
+
+    ```{r}
+    renv::install("torch")
+    library(torch)
+
+    ```
+
+Thursday, Feb 23
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Item 1
+2.  Item 2
+3.  Item 3
+:::
+
+In the last class we looked at the following numerical implementation of gradient descent in R
+
+```{r}
+x <- cars$speed
+y <- cars$dist
+```
+
+```{r}
+# define the loss function
+Loss <- function(b,x,y){
+  squares <- (y- b[1] - b[2] *x)^2
+  return ( sum(squares))
+}
+
+b <- rnorm(2)
+Loss(b, cars$speed, cars$dist)
+```
+
+This is the **numerical** gradient function we looked at:
+
+```{r}
+grad <- function(b, Loss, x, y, eps = 1e-5){
+  b0_up <- Loss( c(b[1] + eps, b[2]), x, y)
+  b0_dn <- Loss( c(b[1] - eps, b[2]), x, y)
+  
+  b1_up <- Loss( c(b[1], b[2] + eps), x, y)
+  b1_dn <- Loss( c(b[1], b[2] - eps), x, y)
+  
+  grad_b0_L <- (b0_up - b0_dn) / (2 * eps)
+  grad_b1_L <- (b1_up - b1_dn) / (2 * eps)
+  
+  return( c(grad_b0_L, grad_b1_L) )
+  
+}
+grad(b, Loss, cars$speed, cars$dist)
+```
+
+```{r}
+
+
+steps <- 9999
+L_numeric <- rep(Inf, steps)
+eta <- 1e-6
+b_numeric <- rep(0.0,2)
+for (i in 1:steps){
+    b_numeric <- b_numeric - eta * grad(b_numeric, Loss, cars$speed, cars$dist)
+    L_numeric[i] <- Loss(b_numeric, cars$speed, cars$dist)
+    if(i %in% c(1:10) || i %% 1000 == 0){
+      cat(sprintf("Iteration: %s\t Loss value: %s\n", i, L_numeric[i]))
+    }
+}
+plot(L_numeric)
+
+```
+
+**Example 1**
+
+```{r}
+x <- torch_randn(c(5,1), requires_grad = TRUE)
+x
+```
+
+This code creates a tensor **`x`** with dimensions 5x1 and sets the **`requires_grad`** argument to **`TRUE`**. The **`requires_grad`** argument indicates that any computation performed on this tensor will be tracked by PyTorch's autograd system, allowing for automatic differentiation and computation of gradients during back-propagation. In the code **`x <- torch_randn(c(5,1), requires_grad = TRUE)`**, the function **`torch_randn`** is used to create a tensor with dimensions **`5 x 1`**. The first dimension (5) refers to the number of rows in the tensor, while the second dimension (1) refers to the number of columns. In other words, this tensor can be thought of as a 5-row vector (sometimes called a column vector), since it has only one column.
+
+```{r}
+sqrt(sum(as_array(x)^2))
+```
+
+```{r}
+f <- function(x){
+  torch_norm(x)^10
+}
+
+y <- f(x)
+y
+
+y$backward()
+```
+
+-   **`f`** is a function that takes a tensor **`x`** as input and returns the 10th power of its L2 norm (i.e., the Euclidean distance between its elements).
+
+-   **`y`** is obtained by applying **`f`** to **`x`**, which is a tensor of size 5x1 generated using the PyTorch function **`torch_randn`** and with **`requires_grad`** set to **`TRUE`**, which means that the tensor will track gradients during computation.
+
+-   **`y`** is a scalar tensor containing a single element, which is the result of applying the function **`f`** to the input tensor **`x`**.
+
+-   **`y$backward()`** computes the gradients of **`y`** with respect to **`x`**, using the chain rule of calculus to propagate the gradients through the computation graph. This operation fills the **`grad`** attribute of **`x`** with the gradients of **`y`** with respect to **`x`**.
+
+\
+
+```{r}
+x$grad
+```
+
+**`x$grad`** retrieves the gradient of the tensor **`x`** after backward propagation. Since **`x`** was created with **`requires_grad = TRUE`**, any computation involving **`x`** that requires gradient computation and back-propagation will result in a computed gradient. The **`y$backward()`** line in the previous example computes the gradients of the tensor **`y`** with respect to all tensors that require gradients, including **`x`**. Therefore, **`x$grad`** retrieves the gradient of **`y`** with respect to **`x`**.
+
+```{r}
+(5 *torch_norm(x)^8) * (2*x)
+```
+
+**Example 2:**
+
+```{r}
+x <- torch_randn(c(10,1), requires_grad = T)
+y <- torch_randn(c(10,1), requires_grad = T)
+
+c(x,y)
+```
+
+```{r}
+f <- function(x, y){
+  sum(x * y)
+}
+
+z <- f(x,y)
+z
+z$backward()
+```
+
+This code defines a function **`f`** that takes two inputs **`x`** and **`y`**, computes their element-wise product, and then returns the sum of the resulting vector. Then, the function is called with **`x`** and **`y`** as arguments, and the result is assigned to **`z`**. Finally, the **`backward`** method is called on **`z`**, which computes the gradient of **`z`** with respect to all tensors that it depends on (in this case, **`x`** and **`y`**). The gradients are then stored in the **`grad`** attribute of **`x`** and **`y`**.\
+
+```{r}
+c(x$grad, y$grad)
+```
+
+```{r}
+c(x - y$grad, y - x$grad )
+```
+
+**`c(x - y$grad, y - x$grad)`** subtracts the gradients of **`y`** and **`x`** from **`x`** and **`y`**, respectively, and concatenates the resulting tensors into a single tensor. This operation effectively computes the difference between the updated values of **`x`** and **`y`** after applying gradient descent with learning rate **`eta`** on the loss function **`f(x, y) = sum(x * y)`**.
+
+**Example 3:**
+
+```{r}
+x <- torch_tensor(cars$speed, dtype = torch_float())
+y <- torch_tensor(cars$dist, dtype = torch_float())
+
+plot(x,y)
+```
+
+The first line of the code creates a tensor **`x`** with the values from the **`speed`** column of the **`cars`** dataset, and a tensor **`y`** with the values from the **`dist`** column of the **`cars`** dataset. The tensors are created with the data type **`torch_float()`**, which is a floating-point data type suitable for numerical computations.
+
+The second line of the code creates a scatter plot with **`x`** on the x-axis and **`y`** on the y-axis. This visualizes the relationship between the **`speed`** and **`dist`** variables in the **`cars`** dataset.\
+
+```{r}
+b <- torch_zeros(c(2,1), dtype = torch_float(), requires_grad = TRUE)
+b
+```
+
+-   **`torch_zeros`** creates a tensor filled with zeros with the specified shape **`(2, 1)`** which corresponds to a column vector with 2 rows.
+
+-   **`dtype = torch_float()`** specifies that the elements of the tensor should be floating-point numbers.
+
+-   **`requires_grad = TRUE`** specifies that the tensor should track operations on it to enable automatic differentiation.
+
+Thus, the variable **`b`** is a PyTorch tensor initialized with zeros, of size **`(2, 1)`**, with floating-point precision, and will track operations performed on it for automatic differentiation.
+
+```{r}
+loss <- nn_mse_loss()
+
+```
+
+This code creates an instance of the Mean Squared Error loss function from the PyTorch neural network module. **`nn_mse_loss()`** is a function that returns a callable object that can be used as a loss function in PyTorch. The mean squared error loss function is commonly used in regression problems where the goal is to minimize the difference between predicted and actual target values.
+
+```{r}
+b <- torch_zeros(c(2,1), dtype = torch_float(), requires_grad = TRUE)
+steps <- 10000
+L <- rep(Inf, steps)
+eta <- 0.5
+optimizer <- optim_adam(b, lr = eta)
+
+for (i in 1:steps){
+  y_hat <- x * b[2] + b[1]
+  l <- loss(y_hat, y)
+  
+  L[i] <- l$item()
+  optimizer$zero_grad()
+  l$backward()
+  optimizer$step() # b <- b - eta * b$grad
+  
+  if(i %in% c(1:10) || i %% 200 == 0){
+    cat(sprintf("Iteration: %s\t Loss value: %s\n", i, L[i]))
+  }
+}
+```
+
+-   **`b <- torch_zeros(c(2,1), dtype = torch_float(), requires_grad = TRUE)`**: creates a tensor **`b`** of size 2x1 with all elements initialized to 0 and requires gradient tracking for autodifferentiation.
+
+-   **`steps <- 10000`**: sets the number of steps for gradient descent.
+
+-   **`L <- rep(Inf, steps)`**: creates a vector **`L`** of length **`steps`** and initializes each element to infinity.
+
+-   **`eta <- 0.5`**: sets the learning rate for the Adam optimizer.
+
+-   **`optimizer <- optim_adam(b, lr = eta)`**: initializes the Adam optimizer with the initial parameter values **`b`** and learning rate **`eta`**.
+
+-   **`for (i in 1:steps){...}`**: iterates through the loop for **`steps`** number of times.
+
+-   **`y_hat <- x * b[2] + b[1]`**: calculates the predicted values **`y_hat`**.
+
+-   **`l <- loss(y_hat, y)`**: calculates the loss function between **`y_hat`** and **`y`**.
+
+-   **`L[i] <- l$item()`**: stores the loss function value in the ith index of **`L`**.
+
+-   **`optimizer$zero_grad()`**: sets the gradients of the optimizer to zero.
+
+-   **`l$backward()`**: backpropagates the gradients through the computation graph.
+
+    > Backpropagation is a fundamental algorithm in deep learning that is used to calculate the gradients of the loss function with respect to the model parameters. It works by traversing the computation graph that was created during the forward pass of the model, from the output layer to the input layer, and calculating the gradients of each layer with respect to its input and output. These gradients are then used to update the weights of the model during the optimization process.
+    >
+    > In the given code, **`l$backward()`** calculates the gradients of the loss function **`l`** with respect to the model parameters, which in this case are the weights **`b`**. These gradients are then used by the optimizer to update the weights during each iteration of the optimization process, in order to minimize the loss and improve the performance of the model.
+
+-   **`optimizer$step()`**: updates the optimizer parameters with the gradients calculated by backpropagation.
+
+-   **`if(i %in% c(1:10) || i %% 200 == 0){...}`**: checks if the current iteration is 1,2,\...,10 or is a multiple of 200 and prints the current iteration number and loss value to the console.
+
+    ```{r}
+    options(repr.plot.width = 12, repr.plot.height = 7)
+    par(mfrow = c(1,2))
+    plot(x,y)
+    abline(as_array(b), col = "red")
+    plot(L, type = "l", col = "dodgerblue")
+    ```
+
+    -   **`options(repr.plot.width = 12, repr.plot.height = 7)`** sets the size of the output plots in the Jupyter notebook.
+
+    -   **`par(mfrow = c(1,2))`** divides the plotting area into a 1x2 grid of subplots, so that the following two plots are shown side by side.
+
+    -   **`plot(x,y)`** creates a scatter plot of the **`x`** values on the horizontal axis and the **`y`** values on the vertical axis.
+
+    -   **`abline(as_array(b), col = "red")`** adds a straight line to the scatter plot. The line passes through the y-axis at the value of **`b[1]`** and has a slope of **`b[2]`**.
+
+    -   **`plot(L, type = "l", col = "dodgerblue")`** creates a line plot of the loss values stored in **`L`** over the course of the optimization process. The type of the plot is set to **`l`** for a line plot, and the color of the line is set to "dodgerblue".\
+
+```{r}
+plot(L_numeric[1:100], type = "l", col = "red")
+lines(L[1:100], col = "blue")
+```
+
+This code is creating a line plot with two lines. The first line (in red) is the first 100 values of the **`L_numeric`** vector, which presumably contains some numeric loss values. The second line (in blue) is also the first 100 values of the **`L`** vector, which was calculated during the optimization process and contains the loss values over iterations. By plotting these two lines together, we can visually compare the numeric loss values to the actual loss values obtained from the optimization process.
+
+### Cross validation
+
+```{r}
+df <- Boston %>% drop_na()
+head(df)
+dim(df)
+```
+
+**`Boston`** is a built-in dataset in R that contains information about housing values in the suburbs of Boston. **`drop_na()`** is a function from the **`tidyr`** package that removes rows with missing values (i.e., **`NA`**) from the dataset. **`head(df)`** displays the first few rows of the resulting dataset **`df`**. **`dim(df)`** returns the dimensions of the dataset, which shows the number of rows and columns.
+
+Split the data into training (80%) and testing sets (20%)
+
+```{r}
+k <- 5
+fold <- sample(1:nrow(df), nrow(df)/k)
+fold
+```
+
+-   **`k <- 5`** assigns the value 5 to the variable **`k`**.
+
+-   **`fold <- sample(1:nrow(df), nrow(df)/5)`** creates a random sample of row indices from 1 to the number of rows in **`df`** (**`nrow(df)`**) with a sample size equal to one-fifth of the number of rows in **`df`** (**`nrow(df)/5`**). The resulting **`fold`** object contains a vector of row indices representing a single fold of data for use in cross-validation.
+
+```{r}
+train <- df %>% slice(-fold)
+test <- df %>% slice(fold)
+```
+
+This code is creating a training set and a testing set using a 5-fold cross-validation technique.
+
+-   **`train`** is created by taking all the rows of the **`df`** dataframe except for the rows indexed by **`fold`**. This is the training set.
+
+-   **`test`** is created by taking only the rows indexed by **`fold`**. This is the testing set.
+
+The variable **`fold`** was generated in the previous step by randomly sampling 1/5th of the rows of **`df`**. This will result in 5 sets of folds that cover all the rows of **`df`** without overlap.
+
+```{r}
+nrow(test) + nrow(train) - nrow(df)
+```
+
+```{r}
+model <- lm(medv ~ ., data = train)
+summary(model)
+```
+
+-   **`lm(medv ~ ., data = train)`** - this line of code fits a linear regression model to the training data **`train`** with **`medv`** as the response variable and all other variables in the data set as the predictors.
+
+-   **`summary(model)`** - this line of code generates a summary of the fitted model **`model`**, including the estimated coefficients, standard errors, t-statistics, p-values, and goodness-of-fit measures such as the R-squared value.
+
+```{r}
+y_test <- predict(model, newdata = test)
+
+```
+
+This line of code is predicting the response variable (**`medv`**) for the test set (**`test`**) using the linear regression model (**`model`**) that was trained on the training set.
+
+The **`predict()`** function in R is used to make predictions from a trained model. In this case, the **`model`** object was trained on the training set **`train`**, and the **`newdata`** argument in the **`predict()`** function is set to **`test`**, which specifies that the function should use the test set data to make predictions.
+
+The output of this line of code is a vector of predicted **`medv`** values for the test set.
+
+```{r}
+mspe <- mean((test$medv - y_test)^2)
+mspe
+```
+
+-   **`test$medv - y_test`** subtracts the predicted values **`y_test`** from the actual values in the test set **`test$medv`**.
+
+-   **`(test$medv - y_test)^2`** squares the differences.
+
+-   **`mean((test$medv - y_test)^2)`** calculates the mean of the squared differences, which is the mean squared prediction error (MSPE) between the predicted values and the actual values in the test set.
+
+### K-Fold Cross Validation
+
+```{r}
+k <- 5
+folds <- sample(1:k, nrow(df), replace = T)
+folds
+```
+
+This code is creating a vector **`folds`** that assigns each observation in the **`df`** dataset to a random fold, with replacement.
+
+**`1:k`**: generates a sequence of integers from 1 to k.
+
+**`nrow(df)`**: returns the number of rows in the data frame **`df`**.
+
+**`replace = T`**: indicates that sampling is done with replacement, meaning that the same row can be selected multiple times in the sampling process.
+
+**`sample(1:k, nrow(df), replace = T)`**: randomly assigns each row of the data frame **`df`** to one of the **`k`** folds by sampling integers from the sequence 1:k. Since sampling is done with replacement, some integers will be selected multiple times, resulting in some folds being larger than others.
+
+Overall, this code is creating a vector **`folds`** that assigns each row of the data frame **`df`** to one of **`k`** folds, where **`k`** is a pre-specified number of folds for k-fold cross-validation.
+
+```{r}
+df_folds <- list()
+```
+
+**`df_folds`** is a new empty list object created in R.
+
+```{r}
+for (i in 1:k){
+  df_folds[[i]] <- list()
+  df_folds[[i]]$train = df[which(folds != i), ]
+  df_folds[[i]]$test = df[which(folds == i), ]
+}
+```
+
+This code performs k-fold cross-validation on the original data **`df`**. Here is the explanation of each line:
+
+-   **`df_folds <- list()`**: Initializes an empty list **`df_folds`** which will be used to store the train and test data for each fold.
+
+-   **`for (i in 1:k){`**: Starts a for loop that iterates over each fold **`i`**.
+
+-   **`df_folds[[i]] <- list()`**: Initializes an empty list for the **`i`**-th fold of **`df_folds`**.
+
+-   **`df_folds[[i]]$train = df[which(folds != i), ]`**: Assigns to the **`train`** element of the **`i`**-th fold of **`df_folds`** the subset of **`df`** where the fold index is not equal to **`i`**. This creates the training data for the **`i`**-th fold.
+
+-   **`df_folds[[i]]$test = df[which(folds == i), ]`**: Assigns to the **`test`** element of the **`i`**-th fold of **`df_folds`** the subset of **`df`** where the fold index is equal to **`i`**. This creates the test data for the **`i`**-th fold.
+
+Overall, the code creates **`k`** folds of the data, where each fold is used once as test data and **`k-1`** times as training data. This enables the performance of the model to be evaluated on multiple test sets, reducing the impact of chance on the model's evaluation.\
