@@ -1,0 +1,297 @@
+---
+title: "Weekly 6 Summary "
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, Feb 7
+
+::: callout-important
+## TIL
+
+Today, I learnt the following concepts in class:
+
+1.  Multicollinearity
+2.  Variable selection
+3.  Shrinkage Estimators
+:::
+
+Packages we will require this week
+
+```{R}
+# Old Packages 
+library(ISLR2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(purrr)
+
+# New Packages
+library(glmnet)
+library(caret)
+library(car)
+# renv::install(packages)
+# lapply(packages, require, character.only = TRUE)
+```
+
+In this class, we are going to look at variable selection. Consider the `Boston housing dataset` which is described here:
+
+```{R}
+library(ISLR2)
+attach(Boston)
+
+df <- Boston
+head(df)
+```
+
+The attach() function in R is used to make an object part of the search path. In this case, Boston is a built-in data frame in R, containing data on housing values in suburbs of Boston. The attach(Boston) function makes this data frame part of the search path, allowing the user to refer to its variables by name (e.g., medv, rm, nox,rad) without having to type the data frame name Boston\$ before each variable name.
+
+#### Explanation of the variables
+
+The original data are 506 observations on 14 variables, medv being the target variable:
+
+$\bullet$ `crim` per capita crime rate by town
+
+$\bullet$ `zn` proportion of residential land zoned for lots over 25,000sq.ft
+
+$\bullet$ `indus` proportion of non-retail business acres per town.
+
+$\bullet$ `chas` Charles River dummy variable( =1 if tract bounds river; 0 otherwise)
+
+$\bullet$ `nox` nitric oxides concentration (parts per 10 million)
+
+$\bullet$ `rm` average number of rooms per dwelling
+
+$\bullet$ `age` proportion of owner-occupied units built prior to 1940
+
+$\bullet$ `dis` weighted distance to five Boston employment centres
+
+$\bullet$ `rad` index of accessibility to radial highways
+
+$\bullet$ `tax` full-value property-tax rate per USD 10,000
+
+$\bullet$ `ptratio` pupil-teacher ratio by town
+
+$\bullet$ `lstat` percentage of lower status of the population
+
+$\bullet$ `medv` median value of owner occupied homes in USD 1000's
+
+### EDA:
+
+#### Histograms
+
+```{R}
+df %>%
+
+keep(is.numeric) %>% 
+# Keep only the numeric columns in df.
+
+gather() %>% 
+# Convert the data from wide to long format
+# using gather(), which stacks all numeric columns on top
+# of each other and creates a new column called "key" to
+# keep track of the original column names.
+
+ggplot(aes(value)) +  
+geom_histogram() + 
+# Creates a histogram of the value
+# column for each key value using ggplot().
+
+
+facet_wrap(~key, scales = 'free')
+# Use facet_wrap() to display each histogram in a
+# separate panel, with the key values used to split the
+# data into the separate panels.
+
+```
+
+The result above is a set of histograms, one for each numeric variable in the original data frame, with the values of that variable on the x-axis and the frequency of those values on the y-axis. The histograms are displayed in separate panels, allowing us to easily compare the distribution of each variable.
+
+NOTE:-
+
+1\) **`%>%`** is a pipe operator in R that allows you to chain multiple functions together. It takes the output of the previous function and passes it as the first argument of the next function. This allows for a more concise and readable way of writing code, especially for data manipulation and analysis.
+
+2\) In the **`facet_wrap()`** function, **`scales = 'free'`** allows each facet to have different scales on the y-axis, meaning that the range of values shown on the y-axis can vary for each facet based on the actual range of values in that facet, instead of having the same y-axis scale for all facets. This is useful when the range of values in different facets varies greatly and it is difficult to see the details of each facet due to the use of a fixed scale
+
+#### Boxplot of the variables
+
+```{R}
+df %>%
+keep(is.numeric) %>%
+gather() %>%
+ggplot(aes(y = value)) + 
+geom_boxplot() + 
+facet_wrap(~key, scales = 'free')
+```
+
+```{R}
+df %>%
+
+select(-chas) %>%
+# Selects all variables from the data frame except for
+# chas using select(-chas).
+
+gather(key, val, -medv) %>%
+# Convert the data from wide to long format using gather,
+# with the variables key and val.
+
+ggplot(aes(x = val, y = medv)) + 
+# Create a scatter plot of medv (median value of owner
+# occupied homes in $1000s) on the y-axis and val on the
+# x-axis using ggplot.
+
+geom_point(alpha = 0.1) + 
+stat_smooth(formula = y~x, method = "lm") + 
+
+facet_wrap(~key, scales = "free")
+# Creates separate panels for each variable using facet_wrap(~key, scales = "free").
+
+```
+
+The resulting plot shows the relationship between **`medv`** and each of the other variables in the data frame, with a linear regression line overlaid on each scatter plot. The transparency of the points allows for better visualization of overlapping points, and the use of **`facet_wrap`** allows for easy comparison of the relationships across the different variables. The **`scales = "free"`** argument ensures that the y-axis scales are different for each panel, to avoid distortion caused by differences in range of the **`medv`** variable.
+
+#### Regression Model
+
+We begin by creating a regression model to predict `medv` using all the predictors:
+
+```{R}
+full_model <- lm(medv ~ .,df)
+summary(full_model)
+
+broom::tidy(full_model)
+# The code broom::tidy(full_model) is using the tidy()
+# function from the broom package to extract the summary
+# statistics of a fitted model object and organize them
+# into a data frame. In this case, full_model is a model
+# object, and tidy(full_model) returns a data frame with
+# information about the coefficients of the model
+# (estimate, standard error, t-statistic, p-value, etc.).
+# The resulting data frame can be used for further
+# analysis or visualization.
+
+```
+
+We can see that most of the variables are significant. However, notably
+
+> `age` and `indus` are not significant predictors of `medv`
+
+Is this true?
+
+```{R}
+plot(medv~age, df)
+abline(lm(medv~age), col = 'red')
+#model_age <- lm(medv ~ age, df)
+#summary(model_age)
+```
+
+NOTE:- Since the 2 10\^-16  is significant and favours the alternate hypothesis as 2 10 \^-16 is smaller than 0.05. If the p-value is less than 0.05 you can reject the null hypothesis favouring the alternate hypothesis which means that the p-value is significant (less than 0.05). On the other hand, if the p-value is greater than 0.05, then we cannot reject the null hypothesis. We observe that the p-value for age is 0.786595 which is above 0.5. Hence, the null hypothesis cannot be rejected, the p-value ultimately favoring the null hypothesis.
+
+```{R}
+plot(medv~indus, df)
+abline(lm(medv ~ indus), col = "blue")
+#model_indus <- lm(medv~indus, df)
+#summary(model_indus)
+```
+
+```{R}
+R <- df %>%
+    keep(is.numeric) %>%
+    cor()
+R
+# cor () calculates the correlation between each pair of variables, and assigns the resulting correlation matrix to the object R.
+```
+
+```{R}
+library(corrplot)
+corrplot(R, type = "upper", order = "hclust")
+```
+
+This code uses the **`corrplot`** package to create a visualization of the correlation matrix **`R`**. The **`type`** argument specifies which part of the correlation matrix to display, and **`upper`** displays only the upper triangle. The **`order`** argument specifies the order of the variables in the plot and **`hclust`** orders them according to hierarchical clustering. The resulting plot displays a color-coded matrix with the correlations between each pair of variables, where red indicates positive correlation, blue indicates negative correlation, and white indicates no correlation.
+
+```{R}
+new_cols <- colnames(df)[-c(5,13)]
+# This code is creating a new object called new_cols that
+# contains all the column names of the df data frame
+# except for the 5th and 13th columns. The [-c(5,13)]
+# part of the code is used to exclude the columns with
+# indices 5 and 13 from the original vector of column
+# names. 
+
+model <- lm(medv~.,df %>% select(-c(indus, nox, dis)))
+# This code fits a linear regression model with medv as
+# the response variable and all other variables (except
+# indus, nox, and dis) as predictor variables. The select
+# (-c(indus, nox, dis)) part of the code removes the
+# columns indus, nox, and dis from the dataset before
+# fitting the model.
+
+
+summary(model)
+```
+
+### Variance Inflation Factors
+
+Variance inflation factor (VIF) is a measure of the extent to which the variance of the estimated regression coefficient is increased due to the presence of correlation among the predictor variables in a multiple regression model. Specifically, VIF measures how much the variance of the estimated regression coefficient of each independent variable is increased due to the correlation with other independent variables in the model. VIF values greater than 1 indicate that the variance of the estimated regression coefficient is increased due to multicollinearity. Typically, VIF values greater than 5 or 10 are considered to be of concern.
+
+```{R}
+library(car)
+vif_model <- lm(medv~.,df)
+vif(vif_model) %>% knitr::kable()
+```
+
+This code calculates the variance inflation factor (VIF) for each predictor variable in a linear regression model with the response variable **`medv`**. The **`car`** package is loaded, and the **`vif()`** function is applied to a linear regression model **`vif_model`** that uses all the predictor variables in the **`df`** data frame. The **`%>%`** operator is used to pass the VIF results to the **`knitr::kable()`** function, which formats the output as a table.
+
+NOTE:- Under variance inflation. If the standard error goes up then the significance value of the null hypothesis goes up. Anything greater than 2 is considered high variance inflation and low otherwise.
+
+## Stepwise Regression
+
+```{R}
+null_model <- lm(medv ~ 1, df)
+full_model <- lm(medv ~ ., df)
+```
+
+**`null_model`** is fitting a linear regression model with only an intercept term, meaning that it assumes the response variable **`medv`** is not associated with any of the predictor variables in the data frame **`df`**.
+
+**`full_model`** is fitting a multiple linear regression model, where the response variable **`medv`** is modeled as a linear combination of all the predictor variables in the data frame **`df`**.
+
+```{R}
+library(caret)
+forward_model <- step(null_model, direction = "forward", scope = formula(full_model))
+summary(forward_model)
+
+```
+
+The code is performing forward stepwise selection using the **`step()`** function from the **`caret`** package. It starts with a null model **`null_model`** which only includes the intercept term and progressively adds one predictor at a time, based on the **`direction = "forward"`** argument. The set of candidate models considered is restricted by the **`scope`** argument, which specifies the full model **`full_model`**. Finally, **`summary(forward_model)`** provides a summary of the model selected by the forward stepwise selection.
+
+AIC stands for Akaike Information Criterion. It is a measure of the quality of a statistical model, relative to other models for the same data. AIC estimates the relative amount of information lost by a given model, while taking into account the number of parameters used by the model. The model with the lowest AIC is generally preferred, as it is expected to have the best predictive power. AIC is the measure of the fitness of the regression model similar to R square. A low AIC score is selected and then keep subsequently adding low AIC score values till you reach a stage when including any of the other variables, AIC then goes up. Hence, we stop where the AIC score is lowest, known as forward selection. 
+
+```{R}
+backward_model <- step(full_model, direction = "backward", score = formula(full_model))
+
+summary(backward_model)
+
+```
+
+The **`step()`** function is used for stepwise regression. The **`backward_model`** is obtained by applying backward stepwise regression on the **`full_model`**. In backward stepwise regression, the function starts with a model that includes all the predictor variables and removes the predictor with the highest p-value one by one until all the remaining variables have p-values below a certain significance level (usually 0.05).
+
+Backward selection - U start with a Full model. Exclude the lowest AIC score variable so that AIC stays small. And when u subsequently exclude the variables there will come a time when the AIC value might increase hence the best stopping time is when excluding variables we have the lowest AIC variable
+
+```{R}
+selected_model <- step(full_model, direction = "both", scope = formula(full_model))
+
+summary(selected_model)
+```
+
+In the provided code, **`step()`** function is used to perform a stepwise regression with both forward and backward selection. The **`full_model`** is specified as the scope of the search, meaning that all predictor variables will be considered.The resulting **`selected_model`** is the selected_model selected by the stepwise regression, with the best subset of predictor variables found by the search.
+
+```{R}
+summary(full_model)
+summary(selected_model)
+
+```
