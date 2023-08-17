@@ -1,0 +1,530 @@
+---
+title: "Weekly Summary 12"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+#format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, April 12
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Real-world neural network classification
+2.  Dataloaders
+3.  Torch for image classification
+:::
+
+```{R}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    "repr",
+    "tidyverse",
+    "kableExtra",
+    "IRdisplay",
+    # NEW
+    "torch",
+    "torchvision",
+    "luz"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+```
+
+### Titanic
+
+```{R}
+url <- "https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv"
+
+df <- read_csv(url) %>%
+    mutate_if(\(x) is.character(x), as.factor) %>%
+    mutate(y = Survived) %>%
+    select(-c(Name, Survived)) %>%
+    (\(x) {
+        names(x) <- tolower(names(x))
+        x
+    })
+```
+
+```{R}
+df %>% head
+```
+
+### Breast Cancer Prediction
+
+```{R}
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data"
+
+col_names <- c("id", "diagnosis", paste0("feat", 1:30))
+
+df <- read_csv(
+         url, col_names, col_types = cols()
+     ) %>% 
+     select(-id) %>% 
+     mutate(y = ifelse(diagnosis == "M", 1, 0)) %>%
+     select(-diagnosis)
+
+
+ df %>% head
+```
+
+### Train/Test Split
+
+```{R}
+k <- 5
+
+test_ind <- sample(
+    1:nrow(df), 
+    floor(nrow(df) / k),
+    replace=FALSE
+)
+```
+
+```{R}
+df_train <- df[-test_ind, ]
+df_test  <- df[test_ind, ]
+
+nrow(df_train) + nrow(df_test) == nrow(df)
+```
+
+### Benchmark with Logistic Regression
+
+```{R}
+fit_glm <- glm(
+    y ~ ., 
+    df_train %>% mutate_at("y", factor), 
+    family = binomial()
+)
+
+glm_test <- predict(
+    fit_glm, 
+    df_test,
+    output = "response"
+)
+
+glm_preds <- ifelse(glm_test > 0.5, 1, 0)
+table(glm_preds, df_test$y)
+
+```
+
+### Neural Net Model
+
+```{R}
+NNet <- nn_module(
+  initialize = function(p, q1, q2, q3) {  
+    self$hidden1 <- nn_linear(p, q1)
+    self$hidden2 <- nn_linear(q1, q2)
+    self$hidden3 <- nn_linear(q2, q3)
+    self$output <- nn_linear(q3, 1)
+    self$activation <- nn_relu()
+    self$sigmoid <- nn_sigmoid()
+  },
+    
+  forward = function(x) {
+    x %>% 
+      self$hidden1() %>% self$activation() %>% 
+      self$hidden2() %>% self$activation() %>% 
+      self$hidden3() %>% self$activation() %>% 
+      self$output() %>% self$sigmoid()
+  }
+)
+```
+
+### Fit using Luz
+
+```{R}
+M <- model.matrix(y ~ 0 + ., data = df_train)
+```
+
+```{R}
+fit_nn <- NNet %>%
+    #
+    # Setup the model
+    #
+    setup(
+        loss = nn_bce_loss(),
+        optimizer = optim_adam, 
+        metrics = list(
+            luz_metric_accuracy()
+        )
+    ) %>% 
+    #
+    # Set the hyperparameters
+    #
+    set_hparams(p=ncol(M), q1=256, q2=128, q3=64) %>% 
+    set_opt_hparams(lr=0.005) %>% 
+    #
+    # Fit the model
+    #
+    fit(
+        data = list(
+            model.matrix(y ~ 0 + ., data = df_train),
+            df_train %>% select(y) %>% as.matrix
+        ),
+        valid_data = list(
+            model.matrix(y ~ 0 + ., data = df_test),
+            df_test %>% select(y) %>% as.matrix
+        ),
+        epochs = 50, 
+        verbose = TRUE
+    )
+```
+
+```{R}
+plot(fit_nn)
+```
+
+```{R}
+nn_test <- predict(
+    fit_nn, 
+    model.matrix(y ~ . - 1, data = df_test)
+)
+# nn_test
+nn_preds <- ifelse(nn_test > 0.5, 1, 0)
+
+table(nn_preds, df_test$y)
+```
+
+```{R}
+mean(nn_preds == df_test$y)
+```
+
+```{R}
+table(glm_preds, df_test$y)
+```
+
+```{R}
+mean(glm_preds == df_test$y)
+```
+
+### Data Loaders
+
+-   Dataloaders are a key component in the machine learning pipeline.
+
+-   They handle loading and preprocessing data in a way that is efficient for training and evaluating models.
+
+-   Dataloaders make it easy to work with large datasets by loading the data in smaller chunks (called **batches**) and applying transformations *on-the-fly*.
+
+```{R}
+transform <- function(x) x %>% 
+    torch_tensor() %>% 
+    torch_flatten() %>% 
+    torch_div(255)
+```
+
+```{R}
+dir <- "./mnist"
+
+train_ds <- mnist_dataset(
+    root = dir,
+    train = TRUE,
+    download = TRUE,
+    transform = transform
+)
+test_ds <- mnist_dataset(
+    root = dir,
+    train = FALSE,
+    download = TRUE,
+    transform = transform
+)
+```
+
+```{R}
+typeof(train_ds)
+```
+
+```{R}
+length(train_ds)
+```
+
+```{R}
+train_ds$data[42000, ,]
+```
+
+```{R}
+i <- sample(1:length(train_ds), 1)
+x <- train_ds$data[i, ,] %>% t
+par(mar = c(2, 2, 2, 2))
+image(x[1:28, 28:1], useRaster=TRUE, axes=FALSE, col=gray.colors(1000), main = train_ds$targets[i]-1 )
+```
+
+```{R}
+par(mfrow = c(3, 3), mar = c(2, 2, 2, 2))
+
+
+for(iter in 1:9){
+    i <- sample(1:length(train_ds), 1)
+    x <- train_ds$data[i, ,] %>% t
+    image(x[1:28, 28:1], useRaster = TRUE, axes = FALSE, col = gray.colors(1000), main = train_ds$targets[i]-1)
+}
+```
+
+### Image Classification 
+
+```{R}
+train_dl <- dataloader(train_ds, batch_size = 1024, shuffle = TRUE)
+test_dl <- dataloader(test_ds, batch_size = 1024)
+```
+
+```{R}
+NNet_10 <- nn_module(
+  initialize = function(p, q1, q2, q3, o) {
+    self$hidden1 <- nn_linear(p, q1)
+    self$hidden2 <- nn_linear(q1, q2)
+    self$hidden3 <- nn_linear(q2, q3)
+    self$OUTPUT <- nn_linear(q3, o)
+    self$activation <- nn_relu()
+  },
+  forward = function(x) {
+    x %>%
+      self$hidden1() %>%
+      self$activation() %>%
+      self$hidden2() %>%
+      self$activation() %>%
+      self$hidden3() %>%
+      self$activation() %>%
+      self$OUTPUT()
+  }
+)
+```
+
+```{R}
+fit_nn <- NNet_10 %>%
+    #
+    # Setup the model
+    #
+    setup(
+        loss = nn_cross_entropy_loss(),
+        optimizer = optim_adam,
+        metrics = list(
+            luz_metric_accuracy()
+        )
+    ) %>%
+    #
+    # Set the hyperparameters
+    #
+    set_hparams(p=28*28, q1=256, q2=128, q3=64, o=10) %>% 
+    #
+    # Fit the model
+    #
+    fit(
+        epochs = 10,
+        data = train_dl,
+        # valid_data = test_dl,
+        verbose=TRUE
+    )
+```
+
+```{R}
+NN10_preds <- fit_nn %>% 
+  predict(test_ds) %>% 
+  torch_argmax(dim = 2) %>%
+  as_array()
+```
+
+```{R}
+mean(NN10_preds == test_ds$targets)
+```
+
+```{R}
+table(NN10_preds - 1, test_ds$targets - 1)
+```
+
+```{R}
+caret::confusionMatrix(
+  (NN10_preds - 1) %>% as.factor, 
+  (test_ds$targets - 1) %>% as.factor
+)
+```
+
+```{R}
+options(repr.plot.width = 10, repr.plot.height = 10)
+par(mfrow=c(3,3), mar = c(2, 2, 2, 2))
+
+for(iter in 1:9){
+    i <- sample(1:length(test_ds), 1)
+    x <- test_ds$data[i, ,] %>% t
+    image(x[1:28, 28:1], useRaster = TRUE, axes = FALSE, col = gray.colors(1000), main = paste("predicted =", NN10_preds[i] - 1))
+}
+```
+
+## Thursday, April 13
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Supervised Learning
+2.  Unsupervised Learning
+3.  Principal Component Analysis
+:::
+
+## **Supervised learning**
+
+For a majority of this course we have focused on **supervised learning** where we have access to **labelled data** i.e., we are given access to the *covariates and the responses*
+
+observation 1: $(X_{1,1}, X_{2,1}, \dots X_{p,1}, y_1)$
+
+observation 2: $(X_{1,2}, X_{2,2}, \dots X_{p,2}, y_2)$
+
+observation n: $(X_{1,n}, X_{2,n}, \dots X_{p,n}, y_n)$
+
+Our **goal** has been to:
+
+-   Predict $y$ using $X_1, X_2, \dots X_p$
+
+-   Understand how each $X_i$ influences the response $y$
+
+## Unsupervised Learning
+
+In unsupervised learning we **DON\'T** have access to the labelled data, i.e., we are only given:
+
+observation 1: $(X_{1,1}, X_{2,1}, \dots X_{p,1})$
+
+observation 2: $(X_{1,2}, X_{2,2}, \dots X_{p,2})$
+
+observation n: $(X_{1,n}, X_{2,n}, \dots X_{p,n})$
+
+Our **goal** here is:
+
+-   To understand the relationship between $X_1, X_2, \dots X_p$
+
+    > -   **dimension reduction**:
+    >
+    > Can we discover subgroups of variables $X_1, X_2, \dots X_p$ which behave similarly?
+    >
+    > -   **clustering**:
+    >
+    > Can we discover subgroups of observations $1, 2, \dots n$ which are similar?
+
+#### **Why unsupervised learning?**
+
+It is always easier to obtain unlabeled data as oppposed to labeled data (which require someone or something to actually assign the proper responses $y_1, y_2, \dots y_n$)
+
+In statistics and data science, there are a multitude of different methods which have been proposed to tackle each of the two problems. They include:
+
+-   **Dimension reduction**:
+
+    -   Principal component analysis
+
+    -   Uniform Manifold Approximation (UMAP)
+
+    -   t-Stochastic Neighbor embedding (t-SNE)
+
+    -   ...
+
+-   **Clustering**:
+
+    -   k-means clustering
+
+    -   Hierarchical clustering
+
+    -   Topological clustering
+
+    -   Laplacian eigenmaps
+
+## Principal Component Analysis
+
+Given variables $X_1, X_2, \dots, X_p)$, PCA produces a low-dimensional representation of the dataset, i.e.,
+
+observation 1: $(X_{1,1}, X_{2,1}, \dots X_{p,1}) \rightarrow\ (Z_{1,1}, Z_{2,1})$
+
+observation 2: $(X_{1,2}, X_{2,2}, \dots X_{p,2}) \rightarrow\ (Z_{1,2}, Z_{2,2})$
+
+observation n: $(X_{1,n}, X_{2,n}, \dots X_{p,n}) \rightarrow\ (Z_{1,n}, Z_{2,n})$
+
+It tries to create variables $Z_1, Z_2, \dots Z_q$ for $q<p$ such that:
+
+1.  $q<<p$
+
+2.  $Z_1, Z_2, \dots Z_q$ contains *roughly* the same information as $X_1, X_2, \dots X_p$
+
+#### **How does PCA achieve this?**
+
+##### **Step 1:**
+
+The **first principal component** $Z_1$ is the *normalized* linear combination of the features:
+
+$$
+Z_1  = v_{11}X_1 + v_{21}X_2 + \dots v_{p1}X_p
+$$
+
+such that:
+
+$\bullet$ $Z_1$ has the largest possible variance
+
+$\bullet$ $\sum_{i=0}^p  v_{p,i} ^2 = 1$
+
+#### **Note:**
+
+$V_1 = (v_{1,1}, v_{2,1}, \dots v_{p,1})$are called the **factor loadings** of the first principal component.
+
+##### **Step 2:**
+
+The **second principal component** $Z_2$ is the *normalized* linear combination of the features:
+
+$$
+Z_2  = v_{12}X_1 + v_{22}X_2 + \dots v_{p2}X_p
+$$
+
+such that:
+
+-   $V_2 \perp V_1$
+
+-   $Z_2$ has the largest possible variance
+
+-   $\sum_{i=0}^p  v_{p,2} ^2 = 1$
+
+##### **Step q:**
+
+The $qth$ principal component $Z_q$ is the *normalized* linear combination of the features:
+
+$$
+Z_q  = v_{1q}X_1 + v_{2q}X_2 + \dots v_{pq}X_p
+$$
+
+such that:
+
+-   $Z_q$ has the largest possible variance
+
+-   $V_q \perp$ span $(V_1, V_2, \dots V_{q-1})$
+
+-   $\sum_{i=0}^p  v_{p,2} ^2 = 1$
+
+### Example in R
+
+In R, we can use the built-in function prcomp() to perform PCA.
+
+```{R}
+data <- tibble(
+  x1 = rnorm(100, mean = 0, sd = 1),
+  x2 = x1 + rnorm(100, mean = 0, sd = 0.1)
+)
+```
+
+```{R}
+pca <- princomp(data, cor = TRUE)
+summary(pca)
+```
+
+```{R}
+pca$loadings
+```
