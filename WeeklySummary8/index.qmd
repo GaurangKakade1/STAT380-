@@ -1,0 +1,548 @@
+---
+title: "Weekly 8 Summary"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, 14th
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  k-Fold Cross Validation
+2.  Wrapped in a Function
+3.  How to use the Caret Package (caret for LASSO)
+:::
+
+```{R}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    # New packages
+    "glmnet",
+    "caret",
+    "car",
+    "corrplot",
+    "repr"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+```
+
+Cross validation
+
+```{R}
+library(ISLR2)
+attach(Boston)
+```
+
+```{R}
+df <- Boston %>% drop_na()
+head(df)
+dim(df)
+```
+
+```{R}
+k <- 5
+fold <- sample(1:nrow(df), nrow(df)/k)
+fold
+```
+
+```{R}
+train <- df %>% slice(-fold)
+test <- df %>% slice(fold)
+```
+
+```{R}
+nrow(test) + nrow(train) - nrow(df)
+```
+
+```{R}
+model <- lm(medv ~ ., data = train)
+summary(model)
+```
+
+```{R}
+y_test <- predict(model, newdata = test)
+
+```
+
+```{R}
+mspe <- mean((test$medv - y_test)^2)
+mspe
+```
+
+```{R}
+k <- 5
+folds <- sample(1:k, nrow(df), replace = T)
+folds
+
+df_folds <- list()
+
+for(i in 1:k){
+  df_folds[[i]] <- list()
+  df_folds[[i]]$train = df[which(folds != i), ]
+  df_folds[[i]]$test = df[which(folds == i), ]
+  
+}
+```
+
+```{R}
+nrow(df_folds[[2]]$train) + nrow(df_folds[[2]]$test) - nrow(df)
+```
+
+```{R}
+nrow(df_folds[[3]]$train) + nrow(df_folds[[4]]$test) - nrow(df)
+```
+
+```{R}
+kfold_mspe <- c()
+for (i in 1:k){
+  model <- lm(medv ~ ., df_folds[[i]]$train)
+  y_hat <- predict(model, df_folds[[i]]$test)
+  kfold_mspe[i] <- mean((y_hat - df_folds[[i]]$test$medv)^2)
+}
+kfold_mspe
+```
+
+```{R}
+mean(kfold_mspe)
+```
+
+### Wrapped in a function
+
+```{R}
+make_folds <- function(df, k){
+  
+  folds <- sample(1:k, nrow(df), replace = T)
+  
+  df_folds <- list()
+  
+  for(i in 1:k){
+  
+  df_folds[[i]] <- list()
+  
+  df_folds[[i]]$train = df[which(folds!=i), ]
+  
+  df_folds[[i]]$test = df[which(folds == i), ]
+  
+  }
+  
+  return(df_folds)
+}
+
+```
+
+```{R}
+cv_mspe <- function(formula, df_folds){
+  
+  kfold_mspe <- c()
+  
+  for(i in 1:length(df_folds)){
+    
+    model <- lm(formula, df_folds[[i]]$train)
+    
+    y_hat <- predict(model, df_folds[[i]]$test)
+    
+    kfold_mspe[i] <- mean((y_hat - df_folds[[i]]$test$medv)^2)
+  }
+  return(mean(kfold_mspe))
+}
+```
+
+```{R}
+df_folds <- make_folds(df, 5)
+```
+
+```{R}
+cv_mspe(medv ~ ., df_folds)
+cv_mspe(medv ~ 1, df_folds)
+```
+
+## Using the `caret` package
+
+Define the training control for cross validation
+
+```{R}
+ctrl <- trainControl(method = "cv", number = 5)
+```
+
+```{R}
+model <- train(medv ~ ., data = df, method = "lm", trControl = ctrl)
+summary(model)
+```
+
+```{R}
+predictions <- predict(model, df)
+```
+
+### `caret` for LASSO
+
+Bias-variance tradeoff
+
+```{R}
+ctrl <- trainControl(method = "cv", number = 5)
+
+# Define the tuning grid
+grid <- expand.grid(alpha = 1, lambda = seq(0, 0.1, by = 0.001))
+
+# Train the model using Lasso regression with cross-
+# validation
+lasso_fit <- train(
+  medv ~ .,
+  data = df,
+  method = "glmnet",
+  trControl = ctrl,
+  tuneGrid = grid,
+  standardize = TRUE,
+  family = "gaussian"
+)
+
+plot(lasso_fit)
+
+```
+
+## Thursday, Jan 19
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Logistic Regression
+2.  Logistic Regression with torch
+3.  Classification with Neural Networks
+:::
+
+```{R}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    "glmnet",
+    "caret",
+    "car",
+    "corrplot",
+    "repr",
+    # NEW
+    "torch",
+    "mlbench"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only=TRUE)
+```
+
+$$
+\boxed{y = \beta_0 + \beta_1 + \dots \beta_p x_p}
+$$
+
+looking at different loss functions:
+
+1.  Least-squares: $L(\beta) = \| y_i - \beta_0 - \beta_1 x_1 - \dots - \beta_p x_p\|^2$
+
+2.  Penalized least squares/LASSO:
+
+    $$
+    L(\beta) = \sum_{i=1}^n \|y_i - \beta_0 - \beta_1 x_1 -\dots - \dots - \beta_p x_p\|^2 + \lambda ||{\beta}||_1
+    $$
+
+### Classification
+
+We will be using the following dataset for the examples here
+
+> Breast cancer dataset: This dataset contains measurements of various characteristics of breast cancer cells, with the goal of predicting whether a tumor is benign or malignant.
+
+```{R}
+url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data"
+col_names <- c("id", "diagnosis", paste0("feat", 1:30))
+df <- read_csv(
+  url, col_names, col_types = cols()
+  ) %>%
+  select(-id) %>%
+  mutate(outcome = ifelse(diagnosis == "M", 1, 0)) %>%
+  select(-diagnosis)
+```
+
+```{R}
+head(df)
+```
+
+```{R}
+reg_model <- lm(outcome ~ ., df)
+summary(reg_model)
+```
+
+```{R}
+n <- 100
+new_patients <- data.frame(matrix(rnorm(30*n), nrow = n))
+colnames(new_patients) <- paste0("feat", 1:30)
+new_predictions <- predict(reg_model, newdata = new_patients, type = "response")
+```
+
+```{R}
+print(new_predictions %>% head())
+```
+
+```{R}
+boxplot(new_predictions)
+```
+
+### The need for logistic regression
+
+##### The main idea behind logistic regression is to transform the predicted values from linear regression so that they represent probabilities.
+
+#### Odds and odds ratios
+
+Odds ratios are a way to compare the odds of an event occurring between two different groups. The odds ratio is defined as the ratio of the odds of an event not the odds of the event occuring in the another group.
+
+```{R}
+set.seed(123)
+binary_var <- rbinom(100, size = 1, prob = 0.6)
+group_var <- sample(1:2, size = 100, replace = TRUE)
+odds_group1 <- sum(binary_var[group_var == 1]) / sum(!binary_var[group_var == 1])
+odds_group2 <- sum(binary_var[group_var == 2]) / sum(!binary_var[group_var == 2])
+odds_ratio <- odds_group1 / odds_group2
+cat(paste("Odds groups 1: ", round(odds_group1, 2), "\n"))
+cat(paste("Odds groups 2: ", round(odds_group2, 2), "\n"))
+cat(paste("Odds groups: ", round(odds_ratio, 2), "\n"))
+```
+
+$$
+\begin{aligned}
+log-odds(p(x)) = b_0 + b_1 x \\ \\ \\ \\
+p(x) = \frac{1}{1 + \exp(\beta_0 + \beta_1)}
+\end{aligned}
+$$
+
+Logistic regression model
+
+Now let's move on to the logistic regression model. The logistic regression model is a type of generalized linear model that models the probability of an event occurring as a function of one or more predictor variables. The logistic regression model uses the logistic function, also known as the sigmoid function, to model the relationship between the predictor variables and the probability of the event occurring.
+
+**The sigmoid function is given as follows**
+
+$$
+\sigma(x) = \frac{1}{1 + e^{-x}} 
+$$
+
+```{R}
+sigmoid <- \(x) 1/(1 + exp(-x))
+curve(sigmoid, -7, 7, ylab = "sigmoid(x)")
+```
+
+In logistic regression, the underlying model is assumed to be of the form
+
+$$
+p(x) = \sigma(\beta_{0} + \beta_{1}x) =  \frac{1}{1 + \exp(-\beta_0 - \beta_1)}
+$$
+
+### Logistic regression example
+
+The `glm()` function fits a generalized linear model, which includes logistic regression as a special case.
+
+```{R}
+set.seed(123)
+x <- rnorm(100)
+y <- rbinom(100, size = 1, prob = exp(0.5 + 0.8 * x)/(1 + exp(0.5 + 0.8*x)))
+```
+
+```{R}
+model <- glm(y~x, family = binomial())
+summary(model)
+```
+
+```{R}
+x_test <- -0.5
+coef(model)[1] + coef(model)[2] * x_test
+```
+
+```{R}
+predict(model, newdata = data.frame(x=x_test), type = "response")
+```
+
+```{R}
+new_x <- seq(-2, 2, by = 0.1)
+p1 <- predict(model, data.frame(x=new_x))
+p2 <- predict(model, data.frame(x=new_x), type = "response")
+```
+
+```{R}
+boxplot(p1, p2)
+```
+
+**Logistic regression for breast cancer**
+
+Let's start by fitting a logistic regression model to the breast cancer dataset using the `glm()` function in R.
+
+```{R}
+df <- df %>% mutate_at("outcome", factor)
+```
+
+```{R}
+model <- glm(outcome ~ ., data = df, family = binomial())
+summary(model)
+```
+
+```{R}
+new_patient <- data.frame(matrix(rnorm(30), nrow = 1))
+names(new_patient) <- paste0("feat", 1:30)
+predict(model, newdata = new_patient, type = "response")
+```
+
+### Redo logistic regression, but this time using the `torch` library
+
+Now that we have torch library installed, we can perform logistic regression using the following steps:
+
+1.  Convert the data to a tensor
+2.  Define the model architecture
+3.  Define the loss function
+4.  Define the optimizer
+5.  Train the model
+6.  Make a predictions
+
+```{R}
+X <- cbind(x)
+x_tensor <- torch_tensor(X, dtype = torch_float())
+y_tensor <- torch_tensor(y, dtype = torch_float())
+```
+
+```{R}
+module <- nn_module(
+  "logistic_regression",
+  initialize = function() {
+    self$fc1 <- nn_linear(1,1)
+    self$fc2 <- nn_sigmoid()
+  },
+  forward = function(x) {
+    x %>%
+      self$fc1() %>%
+      self$fc2()
+  }
+)
+```
+
+```{R}
+logistic_reg <- module()
+```
+
+```{R}
+y_pred <- logistic_reg(x_tensor)
+y_pred %>% head()
+```
+
+> **Question: What is an appropriate loss function?**
+
+```{R}
+L <- function(x, y, model){
+    y_pred <- model(x)
+    return(mean((y_pred - y)^2))
+}
+```
+
+```{R}
+logistic_reg_1 <- module()
+L(x_tensor, y_tensor, logistic_reg)
+```
+
+Optimization
+
+```{R}
+optimizer <- optim_adam(logistic_reg_1$parameters, lr = 0.0001)
+
+epochs <- 10000
+for(i in 1:epochs){
+    loss <- L(x_tensor, y_tensor, logistic_reg_1)
+    
+    optimizer$zero_grad()
+    loss$backward()
+    optimizer$step()
+    
+    if (i %% 1000 == 0){
+      cat(sprintf("Epoch: %d, Loss: %.4f\n", i, loss$item()))
+    }
+}
+```
+
+**Logistic loss function**
+
+a.k.a Binary cross entropy `nn_bce()`
+
+```{R}
+nn_bce_loss()
+```
+
+An `nn_module` containing 0 parameters.
+
+```{R}
+L2 <- function(x, y, model){
+    nn_bce_loss()(model(x), y)
+}
+
+logistic_reg_2 <- module()
+L2(x_tensor, y_tensor, logistic_reg_2)
+```
+
+```{R}
+optimizer <- optim_adam(logistic_reg_2$parameters, lr = 0.0001)
+
+epochs <- 200
+for (i in 1:epochs){
+    loss <- L2(x_tensor, y_tensor, logistic_reg_2)
+    
+    optimizer$zero_grad()
+    loss$backward()
+    optimizer$step()
+    
+    if(i %% 1000 == 0) {
+        cat(sprintf("Epoch: %d, Loss: %.4f\n", i, loss$item()))
+    }
+}
+```
+
+This code is performing training using the Adam optimizer on a logistic regression model (**`logistic_reg_2`**) with L2 regularization. The **`epochs`** variable specifies the number of times to iterate over the entire training dataset.
+
+In each iteration, the code computes the loss by calling the **`L2`** function with the input tensor **`x_tensor`**, the target tensor **`y_tensor`**, and the model **`logistic_reg_2`**. It then performs backpropagation to compute the gradients of the loss with respect to the model parameters, zeroing out the gradients from the previous iteration, and updating the model parameters using the Adam optimizer.
+
+The **`cat`** function is used to print the current epoch and loss value, which can be useful for monitoring the training process.
+
+The importance of this code is that it is used to train a logistic regression model with L2 regularization, which is a commonly used technique for reducing overfitting in machine learning models. The trained model can then be used for making predictions on new data.
+
+This code trains a logistic regression model with L2 regularization using the Adam optimizer.
+
+-   **`optimizer <- optim_adam(logistic_reg_2$parameters, lr = 0.0001)`**: Initializes the Adam optimizer with a learning rate of 0.0001 and the parameters of the logistic regression model **`logistic_reg_2`**.
+
+-   **`epochs <- 200`**: Sets the number of training epochs to 200.
+
+-   **`for (i in 1:epochs){}`**: Loops over each epoch from 1 to 200.
+
+-   **`loss <- L2(x_tensor, y_tensor, logistic_reg_2)`**: Computes the loss of the logistic regression model on the training data **`x_tensor`** and **`y_tensor`**, with L2 regularization using **`logistic_reg_2`**.
+
+-   **`optimizer$zero_grad()`**: Resets the gradients of the optimizer.
+
+-   **`loss$backward()`**: Computes the gradients of the loss with respect to the model parameters, using automatic differentiation.
+
+-   **`optimizer$step()`**: Updates the model parameters using the computed gradients and the Adam optimizer.
+
+-   **`if(i %% 1000 == 0) {}`**: Checks if the current epoch is a multiple of 1000, and if so, prints the current epoch and loss.
+
+The code is important because it trains a logistic regression model with L2 regularization, which can help prevent overfitting and improve generalization performance. The Adam optimizer is a popular optimization algorithm for deep learning models, and it can help improve the convergence speed of the model during training. The code can be used for a variety of classification tasks, such as image recognition, natural language processing, and recommendation systems.
