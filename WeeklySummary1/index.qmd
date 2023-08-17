@@ -1,0 +1,167 @@
+---
+title: "Week 3 Summary "
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+# format: html
+format: pdf
+---
+
+------------------------------------------------------------------------
+
+## Tuesday, Jan 17
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Learnt how to read in datasets
+2.  Package dplyr
+3.  Package ggplot2
+:::
+
+```{R}
+library(dplyr)
+library(knitr)
+```
+
+```{R}
+data_hardCode <- data.frame (
+  Name = c("Alice", "Bob", "Charlie"),
+  Age = c(21, 25, 35),
+  height = c(5.5, 6.2, 5.9)
+)
+data_hardCode %>%knitr::kable()
+
+```
+
+## Exploratory Data Analysis
+
+Packages like `dplyr` and `ggplot` are beneficial
+
+## dplyr
+
+The objective of dplyr is to provide a set of "verbs" for manipulating data.
+
+Let's take the following working example:
+
+1.Iris (flower petal) dataset
+
+```{R}
+library(ggplot2)
+head(iris, 5) %>% knitr::kable()
+```
+
+Using mutate we can create new columns for existing ones
+
+```{R}
+iris %>% 
+  mutate(Sepal.Area = Sepal.Length * Sepal.Width) %>% 
+  head(., 10) %>% 
+  knitr::kable()
+```
+
+## ggplot2
+
+gg in ggplot2 stands for: Grammar of Graphics.
+
+```{R}
+library(ggplot2)
+plt <- ggplot(iris)
+```
+
+Adding point
+
+```{R}
+plt + geom_point(
+    aes(x=Petal.Length, y=Sepal.Length)
+)
+```
+
+To color the points by Species
+
+```{R}
+plt + geom_point(
+    aes(x=Petal.Length, y=Sepal.Length, colour=Species)
+)
+```
+
+Adding trendlines to these points
+
+```{R}
+plt + 
+geom_point(
+    aes(x=Petal.Length, y=Sepal.Length, colour=Species)
+) +  
+geom_smooth(
+    aes(x=Petal.Length, y=Sepal.Length)
+)
+```
+
+`geom_smooth()` using method = 'loess' and formula = 'y \~ x'
+
+If we want to add linear trend line, we can choose the following method
+
+```{R}
+plt + 
+geom_point(
+    aes(x=Petal.Length, y=Sepal.Length, colour=Species)
+) +  
+geom_smooth(
+    aes(x=Petal.Length, y=Sepal.Length),
+    method = lm
+)
+```
+
+
+## Thursday, Jan 19
+
+::: callout-important
+## TIL
+
+Include a *very brief* summary of what you learnt in this class here.
+
+Today, I learnt the following concepts in class:
+
+1.  Discussed about Group project requirements
+2.  Learnt about ggThemeAssist
+3.  Discussed and learnt how to use packages within tidyverse e.g. 'purrr' 
+:::
+
+## purr
+
+This package provides a set of functional programming tools. It’s best illustrated through an example:
+
+
+
+Consider the following task:
+
+  1.Take a number i from 
+  2.Create a matrix with entries of dimension 1 … i^2 X i
+  3.Compute the average of the elements of the matrix
+  4.Print it
+
+A functional way to think about this as follows:
+
+$ i \rightarrow\ M_{i\times\ i} \rightarrow\ mean(M)$
+```{R}
+library(purrr)
+map(
+    1:10,
+    function(i){
+        mean(
+            matrix(
+                c(1:i*i), nrow=i
+            )
+        )
+    }
+)
+```
+ 
+
+
+\[\^footnote\]: You can include some footnotes here
