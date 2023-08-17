@@ -1,0 +1,539 @@
+---
+title: "Weekly Summary 13"
+author: "Gaurang Kakade"
+title-block-banner: true
+title-block-style: default
+toc: true
+#format: html
+format: pdf
+---
+
+---
+
+## Tuesday, Apr 18
+
+::: {.callout-important}
+## TIL
+
+Include a _very brief_ summary of what you learnt in this class here. 
+
+Today, I learnt the following concepts in class:
+
+1. Principal Component Analysis
+1. Interpretation of principal components
+1. Principal Component regression
+:::
+
+```{R}
+packages <- c(
+    # Old packages
+    "ISLR2",
+    "dplyr",
+    "tidyr",
+    "readr",
+    "purrr",
+    "repr",
+    "tidyverse",
+    "kableExtra",
+    "IRdisplay",
+    "car",
+    "corrplot",
+    # NEW
+    "torch",
+    "torchvision",
+    "luz",
+    # Dimension reduction
+    "dimRed",
+    "RSpectra"
+)
+
+# renv::install(packages)
+sapply(packages, require, character.only = TRUE)
+```
+
+```{R}
+url <- "https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv"
+
+df <- read_csv(url) %>%
+    mutate_if(\(x) is.character(x), as.factor) %>%
+    mutate(y = Survived) %>%
+    select(-c(Name, Survived)) %>%
+    (\(x) {
+        names(x) <- tolower(names(x))
+        x
+    })
+```
+```{R}
+ url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data"
+col_names <- c("id", "diagnosis", paste0("feat", 1:30))
+
+df <- read_csv(
+       url, col_names, col_types = cols()
+     ) %>% 
+     select(-id) %>% 
+     mutate(y = ifelse(diagnosis == "M", 1, 0)) %>%
+     select(-diagnosis)
+
+
+ df %>% head
+```
+
+```{R}
+k <- 5
+
+test_ind <- sample(
+    1:nrow(df), 
+    floor(nrow(df) / k),
+    replace=FALSE
+)
+```
+
+```{R}
+df_train <- df[-test_ind, ]
+df_test  <- df[test_ind, ]
+
+nrow(df_train) + nrow(df_test) == nrow(df)
+```
+
+```{R}
+transform <- function(x) x %>% 
+    torch_tensor() %>% 
+    torch_flatten() %>% 
+    torch_div(255)
+```
+
+```{R}
+dir <- "./mnist"
+
+train_ds <- mnist_dataset(
+    root = dir,
+    train = TRUE,
+    download = TRUE,
+    transform = transform
+)
+test_ds <- mnist_dataset(
+    root = dir,
+    train = FALSE,
+    download = TRUE,
+    transform = transform
+)
+```
+
+
+```{R}
+i <- sample(1:length(train_ds), 1)
+x <- train_ds$data[i, ,] %>% t
+
+image(x[1:28, 28:1], useRaster=TRUE, axes=FALSE, col=gray.colors(1000), main = train_ds$targets[i]-1 )
+```
+
+```{R}
+par(mfrow=c(3,3), mar=c(1, 1, 1, 1))
+
+for(iter in 1:9){
+    i <- sample(1:length(train_ds), 1)
+    x <- train_ds$data[i, ,] %>% t
+    image(x[1:28, 28:1], useRaster = TRUE, axes = FALSE, col = gray.colors(1000), main = train_ds$targets[i]-1)
+}
+```
+
+```{R}
+train_dl <- dataloader(train_ds, batch_size = 1024, shuffle = TRUE)
+test_dl <- dataloader(test_ds, batch_size = 1024)
+```
+
+```{R}
+NNet_10 <- nn_module(
+  initialize = function(p, q1, q2, q3, o) {
+    self$hidden1 <- nn_linear(p, q1)
+    self$hidden2 <- nn_linear(q1, q2)
+    self$hidden3 <- nn_linear(q2, q3)
+    self$OUTPUT <- nn_linear(q3, o)
+    self$activation <- nn_relu()
+  },
+  forward = function(x) {
+    x %>%
+      self$hidden1() %>%
+      self$activation() %>%
+      self$hidden2() %>%
+      self$activation() %>%
+      self$hidden3() %>%
+      self$activation() %>%
+      self$OUTPUT()
+  }
+)
+```
+
+```{R}
+fit_nn <- NNet_10 %>%
+    #
+    # Setup the model
+    #
+    setup(
+        loss = nn_cross_entropy_loss(),
+        optimizer = optim_adam,
+        metrics = list(
+            luz_metric_accuracy()
+        )
+    ) %>%
+    #
+    # Set the hyperparameters
+    #
+    set_hparams(p=28*28, q1=256, q2=128, q3=64, o=10) %>% 
+    #
+    # Fit the model
+    #
+    fit(
+        epochs = 10,
+        data = train_dl,
+        # valid_data = test_dl,
+        verbose=TRUE
+    )
+```
+
+```{R}
+NN10_preds <- fit_nn %>% 
+  predict(test_ds) %>% 
+  torch_argmax(dim = 2) %>%
+  as_array()
+```
+
+
+
+In R, we can use the built-in function prcomp() to perform PCA.
+
+```{R}
+data <- tibble(
+  x1 = rnorm(100, mean = 0, sd = 1),
+  x2 = x1 + rnorm(100, mean = 0, sd = 0.1),
+  x3 = x1 + rnorm(100, mean = 0, sd = 0.1)
+)
+
+head(data) %>% knitr::kable()
+```
+
+```{R}
+pca <- princomp(data, cor = TRUE)
+summary(pca)
+```
+```{R}
+screeplot(pca, type="l")
+
+```
+
+```{R}
+par(mfrow=c(1, 2))
+
+Z_pca <- predict(pca, data)
+plot(data)
+```
+
+```{R}
+plot(Z_pca)
+```
+
+```{R}
+pca$loadings
+```
+#### Interpretation of principal components
+
+```{R}
+set.seed(42)
+
+n <- 500
+science <- rnorm(n, mean = 60, sd = 10)
+humanities <- rnorm(n, mean = 80, sd=10)
+
+df <- tibble(
+  math = 0.8 * science + rnorm(n, mean = 0, sd = 7),
+  physics = 1.0 * science + rnorm(n, mean = 0, sd = 5),
+  chemistry = 1.3 * science + rnorm(n, mean = 0, sd = 3),
+  history = 0.8 * humanities + rnorm(n, mean = 0, sd = 5),
+  geography = 1.0 * humanities + rnorm(n, mean = 0, sd = 10),
+  literature = 1.2 * humanities + rnorm(n, mean = 0, sd = 2)
+)
+```
+
+```{R}
+df %>%
+    head() %>%
+    round(digits = 2) %>%
+    knitr::kable()
+```
+```{R}
+plot(df$math, df$physics)
+```
+
+```{R}
+pca <- princomp(df, cor=TRUE)
+summary(pca)
+```
+
+```{R}
+plot(pca, type="l")
+```
+### Principal component regression
+```{R}
+df$gpa <- (0.9 * science + 0.5 * humanities + rnorm(n, mean=0, sd=10)) * 4 / 100
+
+df %>% 
+    head() %>%
+    round(digits=2) %>%
+    knitr::kable()
+```
+
+```{R}
+lm_fit <- lm(gpa ~ ., df)
+summary(lm_fit)
+```
+
+```{R}
+vif(lm_fit) %>% t
+```
+
+```{R}
+df %>% 
+    cor() %>% 
+    corrplot(diag=F)
+```
+```{R}
+pca <- princomp(df %>% select(-gpa), cor=TRUE)
+screeplot(pca)
+```
+
+```{R}
+Z <- predict(pca, df)
+
+df_pca <- Z %>% 
+    as_tibble %>% 
+    select(Comp.1, Comp.2) %>% 
+    mutate(gpa = df$gpa)
+
+head(df_pca) %>% knitr::kable()
+```
+```{R}
+df_pca %>% 
+    cor() %>% 
+    corrplot(diag=F)
+```
+
+```{R}
+lm_pca <- lm(gpa ~ ., df_pca)
+summary(lm_pca)
+```
+
+```{R}
+vif(lm_pca) %>% t
+```
+
+
+
+
+
+## Thursday, Apr 20
+
+
+
+::: {.callout-important}
+## TIL
+
+Include a _very brief_ summary of what you learnt in this class here. 
+
+Today, I learnt the following concepts in class:
+
+1. Nonlinear dimension reduction
+1. Autoencoder
+1. Lower-dimensional Encoding of the data
+:::
+```{R}
+generate_two_spirals <- function(){
+  set.seed(42)
+  n <- 500
+  noise <- 0.05
+  t <- (1:n) / n * 4 * pi
+  x1 <- t * (sin(t) + rnorm(n, 0, noise))
+  x2 <- t * (cos(t) + rnorm(n, 0, noise))
+  y  <- t
+  return(tibble(x1=x1, x2=x2, y=y))
+}
+```
+
+```{R}
+df <- generate_two_spirals()
+head(df)
+```
+```{R}
+ggplot(df) +
+    geom_point(aes(x=x1, y=x2, col=y), alpha=0.5) +
+    scale_colour_gradient(low="red", high="blue")
+```
+
+```{R}
+pca <- princomp(df[, 1:2], cor=T)
+pca$loadings
+```
+
+```{R}
+df_pca <- predict(pca, df)
+head(df_pca)
+```
+```{R}
+ggplot(as_tibble(df_pca)) +
+    geom_point(aes(x=Comp.1, y=0, col=df$y), alpha=0.5) +
+    scale_colour_gradient(low="red", high="blue")
+```
+
+```{R}
+library(RDRToolbox)
+```
+
+
+
+```{R}
+isomap <- Isomap(df[, 1:2] %>% as.matrix, dims=1)
+ggplot(as_tibble(isomap)) +
+    geom_point(aes(x=dim1, y=0, col=df$y)) +
+    scale_colour_gradient(low="red", high="blue")
+```
+
+### Autoencoder
+```{R}
+autoencoder <- nn_module(
+    initialize = function(p, q1, q2, q3, o) {
+    self$encoder <- nn_sequential(
+        nn_linear(p, q1), nn_relu(),
+        nn_linear(q1, q2), nn_relu(),
+        nn_linear(q2, q3), nn_relu(),
+        nn_linear(q3, o)
+    )
+    self$decoder <- nn_sequential(
+        nn_linear(o, q3), nn_relu(),
+        nn_linear(q3, q2), nn_relu(),
+        nn_linear(q2, q1), nn_relu(),
+        nn_linear(q1, p)
+    )
+    },
+    forward = function(x) {
+    x %>%
+        torch_reshape(c(-1, 28 * 28)) %>% 
+        self$encoder() %>%
+        self$decoder() %>% 
+        torch_reshape(c(-1, 28, 28))
+    },
+    predict = function(x) {
+    x %>% 
+        torch_reshape(c(-1, 28 * 28)) %>% 
+        self$encoder()     
+    }
+)
+```
+
+```{R}
+X <- test_ds
+inputs <- torch_tensor(X$data * 1.0)
+```
+
+```{R}
+plot_image = \(x) image(t(x)[1:28, 28:1], useRaster=TRUE, axes=FALSE, col=gray.colors(1000))
+```
+
+#### Original vs. Decoded (at initialization) 
+
+```{R}
+AE <- autoencoder(p = 28 * 28, q1 = 32, q2 = 16, q3 = 8, o = 2)
+```
+
+```{R}
+par(mfrow=c(4, 2))
+
+set.seed(123)
+for(k in 1:4){
+    i <- sample(1:10000, 1)
+    input <- inputs[i]
+    output <- AE(inputs[i:i])[1]
+
+    par(mfrow=c(1, 2))
+    plot_image(inputs[i] %>% as_array)
+    title("Original")
+    
+    plot_image(output %>% as_array)
+    title("Decoded")
+}
+```
+
+#### Fitting autoencoder using luz
+```{R}
+ae_fit <- autoencoder %>%
+    setup(
+        loss = nn_mse_loss(),
+        optimizer = optim_adam
+    ) %>%
+
+    set_hparams(
+        p=28*28, q1=128, q2=64, q3=32, o=2
+    ) %>%
+    
+    set_opt_hparams(
+        lr=1e-3
+    ) %>%
+
+    fit(
+        data = list(
+            inputs, 
+            inputs # targets are the same as inputs
+        ),
+        epochs=30,
+        verbose=TRUE,
+        dataloader_options = list(
+            batch_size = 100, 
+            shuffle=TRUE
+        ),
+        callbacks = list(
+            luz_callback_lr_scheduler(
+                torch::lr_step, 
+                step_size = 10, 
+                gamma=1.01
+                )
+        )
+    )
+```
+
+```{R}
+plot(ae_fit)
+```
+#### Lower-dimensional Encoding of the Data
+
+```{R}
+X_dim2 <- predict(ae_fit, inputs) %>% as_array()
+head(X_dim2)
+```
+```{R}
+df_ae <- tibble(
+    x1 = X_dim2[, 1],
+    x2 = X_dim2[, 2],
+    y = as.factor(X$targets - 1)
+)
+
+ggplot(df_ae) +
+    geom_point(aes(x=x1, y=x2, col=y))
+```
+### Original vs. Decoded (after fitting)
+
+```{R}
+par(mfrow=c(4, 2))
+
+set.seed(123)
+for(k in 1:4){
+    i <- sample(1:10000, 1)
+    input <- inputs[i]
+    output <- ae_fit$model$forward(inputs[i:i])[1]
+
+    par(mfrow=c(1, 2))
+    plot_image(inputs[i] %>% as_array)
+    title("Original")
+    
+    plot_image(output %>% as_array)
+    title("Decoded")
+}
+```
+
